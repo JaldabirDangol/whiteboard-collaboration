@@ -1,0 +1,47 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  role      Role     @default(VIEWER)
+  boards    BoardMember[]
+  createdAt DateTime @default(now())
+}
+
+model Board {
+  id          String        @id @default(uuid())
+  title       String
+  snapshots   Snapshot[]
+  members     BoardMember[]
+  createdAt   DateTime      @default(now())
+}
+
+model BoardMember {
+  id      String @id @default(uuid())
+  user    User   @relation(fields: [userId], references: [id])
+  userId  String
+  board   Board  @relation(fields: [boardId], references: [id])
+  boardId String
+  role    Role
+}
+
+model Snapshot {
+  id        String   @id @default(uuid())
+  board     Board    @relation(fields: [boardId], references: [id])
+  boardId   String
+  data      Json
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}

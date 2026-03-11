@@ -13,6 +13,7 @@ model User {
   role      Role     @default(VIEWER)
   boards    BoardMember[]
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Board {
@@ -21,6 +22,7 @@ model Board {
   snapshots   Snapshot[]
   members     BoardMember[]
   createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 }
 
 model BoardMember {

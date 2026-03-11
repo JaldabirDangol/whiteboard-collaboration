@@ -1,9 +1,8 @@
 import express from 'express';
 import cors from 'cors';
-import { createServer } from 'http';
 import dotenv from 'dotenv';
-import { Server } from 'socket.io';
-import path from 'path';
+import http from 'http';
+
 
 dotenv.config();
 
@@ -12,20 +11,7 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-
-const server = createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
-  },
-});
-
-io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
-
-});
+const server = http.createServer(app);
 
 app.get('/', (req, res) => {
   res.send('Hello World!');

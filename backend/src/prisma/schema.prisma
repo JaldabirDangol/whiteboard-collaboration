@@ -7,43 +7,165 @@ generator client {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
-  role      Role     @default(VIEWER)
-  boards    BoardMember[]
+  id    String  @id @default(uuid())
+  email String  @unique
+  name  String?
+  role  Role    @default(VIEWER)
+
+  boards   BoardMember[]
+  shapes   Shape[]
+  messages Message[]
+  comments Comment[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Board {
-  id          String        @id @default(uuid())
-  title       String
-  snapshots   Snapshot[]
-  members     BoardMember[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id    String @id @default(uuid())
+  title String
+
+  members   BoardMember[]
+  shapes    Shape[]
+  snapshots Snapshot[]
+  messages  Message[]
+  assets    Asset[]
+  logs      AuditLog[]
+  settings  BoardSettings?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model BoardMember {
-  id      String @id @default(uuid())
-  user    User   @relation(fields: [userId], references: [id])
+  id String @id @default(uuid())
+
   userId  String
-  board   Board  @relation(fields: [boardId], references: [id])
   boardId String
-  role    Role
+
+  user  User  @relation(fields: [userId], references: [id])
+  board Board @relation(fields: [boardId], references: [id])
+
+  role Role
+
+  @@unique([userId, boardId])
+}
+
+model Shape {
+  id String @id @default(uuid())
+
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  type ShapeType
+  data Json
+
+  comments Comment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Snapshot {
-  id        String   @id @default(uuid())
-  board     Board    @relation(fields: [boardId], references: [id])
-  boardId   String
-  data      Json
+  id String @id @default(uuid())
+
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id])
+
+  version Int
+  data    Json
+
   createdAt DateTime @default(now())
+}
+
+model Message {
+  id String @id @default(uuid())
+
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  content String
+
+  createdAt DateTime @default(now())
+}
+
+model Comment {
+  id String @id @default(uuid())
+
+  shapeId String
+  shape   Shape  @relation(fields: [shapeId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  content String
+
+  createdAt DateTime @default(now())
+}
+
+model Asset {
+  id String @id @default(uuid())
+
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id])
+
+  url  String
+  type AssetType
+
+  uploadedBy String
+
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id String @id @default(uuid())
+
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id])
+
+  userId String
+
+  action   String
+  metadata Json?
+
+  createdAt DateTime @default(now())
+}
+
+model BoardSettings {
+  id String @id @default(uuid())
+
+  boardId String @unique
+  board   Board  @relation(fields: [boardId], references: [id])
+
+  isPublic Boolean @default(false)
+  password String?
 }
 
 enum Role {
   ADMIN
   EDITOR
   VIEWER
+}
+
+enum ShapeType {
+  RECTANGLE
+  CIRCLE
+  LINE
+  ARROW
+  TEXT
+  DRAW
+  IMAGE
+}
+
+enum AssetType {
+  IMAGE
+  PDF
+  VIDEO
+  FILE
 }

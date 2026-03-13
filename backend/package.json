@@ -5,7 +5,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "db:generate": "pnpm dlx prisma generate",
@@ -33,12 +33,18 @@
     "@types/node": "^25.3.3",
     "prisma": "^7.4.2",
     "ts-node-dev": "^2.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "prisma",
       "@prisma/engines"
+    ],
+    "ignoredBuiltDependencies": [
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
     ]
   }
 }

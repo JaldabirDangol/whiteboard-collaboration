@@ -1,11 +1,11 @@
 services:
-  postgres:
+  db:
     image: postgres:15
     container_name: whiteboard_postgres
     restart: always
     environment:
-      POSTGRES_USER: whiteboard
-      POSTGRES_PASSWORD: whiteboard
+      POSTGRES_USER: whiteboarduser
+      POSTGRES_PASSWORD: whiteboardpass
       POSTGRES_DB: whiteboard_db
     ports:
       - "5433:5432"

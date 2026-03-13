@@ -4,12 +4,14 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+  output = "./generated"
 }
 
 model User {
   id    String  @id @default(uuid())
   email String  @unique
   name  String?
+  password String?
   role  Role    @default(VIEWER)
 
   boards   BoardMember[]

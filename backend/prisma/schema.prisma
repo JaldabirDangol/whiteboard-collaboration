@@ -4,7 +4,7 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
-  output = "./generated"
+  output = "../generated/client"
 }
 
 model User {
@@ -12,8 +12,6 @@ model User {
   email String  @unique
   name  String?
   password String?
-  role  Role    @default(VIEWER)
-
   boards   BoardMember[]
   shapes   Shape[]
   messages Message[]
@@ -44,11 +42,10 @@ model BoardMember {
 
   userId  String
   boardId String
+  role    Role
 
   user  User  @relation(fields: [userId], references: [id])
   board Board @relation(fields: [boardId], references: [id])
-
-  role Role
 
   @@unique([userId, boardId])
 }

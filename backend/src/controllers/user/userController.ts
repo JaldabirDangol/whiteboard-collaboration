@@ -4,6 +4,13 @@ import  type { Request, Response } from "express";
 
 export async function createUser(req: Request, res: Response) {
   try {
+    const { email, name, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
+
+    if (await prisma.user.findUnique({ where: { email } })) {
+      return res.status(400).json({ error: "Email already exists" });
+    }
+
     const user = await userService.createUser(req.body);
     return res.status(201).json(user);
   } catch (error) {

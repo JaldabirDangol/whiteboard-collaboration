@@ -2,9 +2,12 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import http from "http";
-
 import userRoutes from "@/routes/userRoutes.js";
 import { connectDB } from "./lib/prisma.js";
+import messageRoutes from "./routes/messageRoute.js";
+import boardRoutes from "./routes/boardRoutes.js";
+import { authMiddleware } from "./middleware/authMiddleware.js";
+import authRoutes from "./routes/authRoutes.js";
 
 dotenv.config();
 
@@ -16,7 +19,10 @@ app.use(express.json());
 
 const server = http.createServer(app);
 
-app.use("/api/users", userRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/users",authMiddleware, userRoutes);
+app.use("/api/boards", authMiddleware, boardRoutes);
+app.use("/api/messages", authMiddleware, messageRoutes);
 
 app.get("/", (req, res) => {
   res.send("Hello World!");

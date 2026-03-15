@@ -62,3 +62,52 @@ export async function removeMember(boardId: string, userId: string) {
     },
   });
 }
+
+export async function getBoardData(boardId: string) {
+  const board = await prisma.board.findUnique({
+    where: { id: boardId },
+    include: {
+      shapes: true,
+      messages: {
+        include: {
+          user: {
+            select: { id: true, name: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!board) return null;
+
+  return {
+    shapes: board.shapes,
+    messages: board.messages.map((msg) => ({
+      id: msg.id,
+      content: msg.content,
+      userId: msg.userId,
+      userName: msg.user.name,
+      createdAt: msg.createdAt,
+    })),
+  };
+}
+
+
+export async function getRecentMessages(boardId: string, limit = 20) {  
+  return await prisma.message.findMany({
+    where: { boardId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    include: {
+      user: {
+        select: { id: true, name: true },
+      },
+    },
+  });
+}
+
+export async function getShapes(boardId: string) {
+  return await prisma.shape.findMany({
+    where: { boardId },
+  });
+}

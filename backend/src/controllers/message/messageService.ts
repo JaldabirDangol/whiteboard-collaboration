@@ -17,8 +17,17 @@ export const getMessagesByBoard = async (boardId: string) => {
   })
 }
 
-export const deleteMessage = async (id: string) => {
-  return prisma.message.delete({
+export const getMessageById = async (id: string) => {
+  return prisma.message.findUnique({
     where: { id }
   })
+}
+
+export const deleteMessage = async (id: string, userId: string) => {
+  const message = await getMessageById(id)
+  if (!message || message.userId !== userId) {
+    return null
+  }
+  await prisma.message.delete({ where: { id } })
+  return true
 }

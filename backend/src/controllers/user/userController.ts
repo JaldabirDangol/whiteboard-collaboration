@@ -2,35 +2,6 @@ import { prisma } from "@/lib/prisma.js";
 import * as userService from "./userServices.js";
 import  type { Request, Response } from "express";
 
-export async function createUser(req: Request, res: Response) {
-  try {
-    const { email, name, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
-
-    if (await prisma.user.findUnique({ where: { email } })) {
-      return res.status(400).json({ error: "Email already exists" });
-    }
-
-    const user = await userService.createUser(req.body);
-    return res.status(201).json(user);
-  } catch (error) {
-    return res.status(400).json({ error: (error as Error).message });
-  }
-}
-
-export async function getUser(req: Request, res: Response) {
-  try {
-    const { id } = req.params;
-    if (!id) return res.status(400).json({ error: "User ID is required" });
-
-    const user = await userService.getUserById(id as string);
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    return res.json(user);
-  } catch (error) {
-    return res.status(500).json({ error: (error as Error).message });
-  }
-}
 
 export async function getUserByEmail(req: Request, res: Response) {
   try {

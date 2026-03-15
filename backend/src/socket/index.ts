@@ -2,12 +2,15 @@ import { Server } from "socket.io"
 import { Server as HttpServer } from "http"
 
 import { registerMessageEvents } from "@/socket/events/messageEvents.js"
-import { registerBoardEvents } from "@/socket/events/boaordEvent.js"
+import { registerBoardEvents } from "@/socket/events/boardEvent.js"
 import { registerPresenceEvents } from "@/socket/events/presenceEvents.js"
 import { socketAuth } from "@/socket/middleware/socketAuth.js"
 
+
+let io: Server;
+
 export const initSocket = (server: HttpServer) => {
-  const io = new Server(server, {
+  io = new Server(server, {
     cors: {
       origin: process.env.FRONTEND_URL || "http://localhost:5173"
     }
@@ -23,5 +26,12 @@ export const initSocket = (server: HttpServer) => {
     registerPresenceEvents(io, socket)
   })
 
+  return io
+}
+
+export const getIO = () => {
+  if (!io) {
+    throw new Error("Socket.io not initialized")
+  }
   return io
 }

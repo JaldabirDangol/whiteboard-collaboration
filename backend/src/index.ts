@@ -8,6 +8,7 @@ import messageRoutes from "./routes/messageRoute.js";
 import boardRoutes from "./routes/boardRoutes.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
 import authRoutes from "./routes/authRoutes.js";
+import { initSocket } from "@/socket/index.js";
 
 dotenv.config();
 
@@ -18,6 +19,7 @@ app.use(cors());
 app.use(express.json());
 
 const server = http.createServer(app);
+const io = initSocket(server);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users",authMiddleware, userRoutes);

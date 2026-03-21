@@ -1,9 +1,9 @@
-import { createUser } from "@/controllers/user/userController.js";
+import { Signup } from "@/controllers/auth/authController.js";
 import { Router } from "express";
 
 const userRoutes:Router = Router();
 
-userRoutes.route("/signup").post(createUser);
+userRoutes.route("/signup").post(Signup);
 
 
 export default userRoutes;

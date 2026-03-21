@@ -26,7 +26,8 @@ export async function getBoard(req: Request, res: Response) {
 
 export async function getBoardsForUser(req: Request, res: Response) {
   try {
-    const { userId } = req.body; // Ideally from req.user if using Auth middleware
+   
+  const userId = req.user?.id;
     if (!userId) return res.status(400).json({ error: "User ID is required" });
 
     const boards = await boardService.getBoardsForUser(userId);

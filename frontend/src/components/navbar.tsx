@@ -49,11 +49,17 @@ const Navbar = () => {
     setThumbnailUrl("");
     toast.success("Board created successfully!");
   },
+  onError:(err)=>{
+    toast.error(err.message)
+  }
 });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()){
+      toast.error("title is required")
+      return
+    }
     createBoard.mutate({ title, thumbnailUrl });
   };
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
+import Header from "@/components/canvas/header";
 
 export default function Page() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -51,11 +52,15 @@ export default function Page() {
       canvas.removeEventListener("mouseup", stop);
     };
   }, []);
-
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ width: "100vw", height: "100vh", display: "block" }}
-    />
+    <div className="h-screen flex flex-col">
+      <Header />
+      <div className="flex-1">
+      <canvas
+        ref={canvasRef}
+        style={{ width: "100vw", height: "100vh", display: "block" }}
+        />
+      </div>
+    </div>
   );
 }

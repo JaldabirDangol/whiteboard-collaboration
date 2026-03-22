@@ -6,6 +6,7 @@ export async function createBoard(req: Request, res: Response) {
   try {
    const userId = req.user?.id;
     if (!userId) return res.status(400).json({ error: "User ID is required" });
+    if(!req.body) return res.status(400).json({error:"title is required"})
 
     let board = await prisma.board.findUnique({
       where:{
@@ -16,9 +17,10 @@ export async function createBoard(req: Request, res: Response) {
     if (board) {
       return res.status(400).json({ error: "Board with this title already exists" });
     }
-     board = await boardService.createBoard(req.body);
+     board = await boardService.createBoard({...req.body , userId});
     return res.status(201).json(board);
   } catch (error) {
+    console.error(error)
     return res.status(400).json({ error: (error as Error).message });
   }
 }
@@ -27,8 +29,6 @@ export async function getBoard(req: Request, res: Response) {
   try {
     const { id } = req.params;
     if (!id) return res.status(400).json({ error: "Board ID is required" });
-    console.log("controll reached here :", id);
-    console.log("Fetching board with ID:", id);
     const board = await boardService.getBoard(id as string);
     if (!board) return res.status(404).json({ error: "Board not found" });
    

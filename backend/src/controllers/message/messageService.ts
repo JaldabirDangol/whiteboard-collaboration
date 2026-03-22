@@ -6,14 +6,32 @@ export const createMessage = async (data: {
   content: string
 }) => {
   return prisma.message.create({
-    data
+    data,
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
   })
 }
 
 export const getMessagesByBoard = async (boardId: string) => {
   return prisma.message.findMany({
     where: { boardId },
-    orderBy: { createdAt: "asc" }
+    orderBy: { createdAt: "asc" },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
   })
 }
 

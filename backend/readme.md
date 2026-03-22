@@ -4,8 +4,7 @@ Implement boardEvent.ts fully:
 
 Broadcast drawing updates (lines, shapes, text) to all connected clients on a board.
 
-Handle undo/redo via sockets if you want live state consistency.
-
+Handle undo/redo via syjs
 Integrate presenceEvents.ts fully:
 
 Track users joining/leaving boards.

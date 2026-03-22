@@ -1,49 +1,39 @@
-import { Server, Socket } from "socket.io"
-import * as Y from "yjs"
-import { getYDoc } from "../../../../frontend/src/yjs"
+import { Server, Socket } from "socket.io";
+import * as Y from "yjs";
+import { getYDoc } from "@/socket/yjs.js" // Path to the file above
 
 export const registerBoardEvents = (io: Server, socket: Socket) => {
 
-  // JOIN BOARD
-  socket.on("board:join", async (boardId: string) => {
+  socket.on("board:join", (boardId: string) => {
     try {
-      socket.join(boardId)
+      socket.join(boardId);
+      const doc = getYDoc(boardId);
 
-      const doc = getYDoc(boardId)
-
-      // Send Yjs state instead of shapes array
-      const state = Y.encodeStateAsUpdate(doc)
-
+      // 1. Initial Sync: Send the full current state to the new user
+      const state = Y.encodeStateAsUpdate(doc);
       socket.emit("board:init", {
         yjsState: state,
         serverTime: Date.now()
-      })
+      });
 
-      socket.to(boardId).emit("board:userJoined", {
-        userId: socket.id,
-        userName: socket.data.userName
-      })
-
+      socket.to(boardId).emit("board:userJoined", { userId: socket.id });
     } catch (error) {
-      socket.emit("error", { message: "Failed to load board data" })
+      socket.emit("error", { message: "Failed to load board" });
     }
-  })
+  });
 
-  // 🔥 MAIN SYNC EVENT (THIS REPLACES EVERYTHING)
-  socket.on("yjs:update", ({ boardId, update }) => {
-    const doc = getYDoc(boardId)
+  // 2. Continuous Sync: The "Holy Grail" event
+  socket.on("yjs:update", ({ boardId, update }: { boardId: string, update: Uint8Array }) => {
+    const doc = getYDoc(boardId);
 
-    // Apply update to server doc
-    Y.applyUpdate(doc, update)
+    // Apply the change to the server's version of the doc
+    Y.applyUpdate(doc, new Uint8Array(update));
 
-    // Broadcast to others
-    socket.to(boardId).emit("yjs:update", update)
-  })
+    // Broadcast that specific change to everyone else in the room
+    socket.to(boardId).emit("yjs:update", update);
+  });
 
-  // DISCONNECT
   socket.on("disconnect", () => {
-    socket.broadcast.emit("board:userLeft", {
-      userId: socket.id
-    })
-  })
-}
+    socket.broadcast.emit("board:userLeft", { userId: socket.id });
+  });
+};

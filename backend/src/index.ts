@@ -9,19 +9,26 @@ import boardRoutes from "./routes/boardRoutes.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
 import authRoutes from "./routes/authRoutes.js";
 import { initSocket } from "@/socket/index.js";
+import cookieParser from "cookie-parser";
+import meRout from "@/routes/me.js";
 
 dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL,
+  credentials: true,
+}));
 app.use(express.json());
+app.use(cookieParser());
 
 const server = http.createServer(app);
 const io = initSocket(server);
 
 app.use("/api/auth", authRoutes);
+app.use("/api/auth/me",authMiddleware, meRout);
 app.use("/api/users",authMiddleware, userRoutes);
 app.use("/api/boards", authMiddleware, boardRoutes);
 app.use("/api/messages", authMiddleware, messageRoutes);

@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma.js";
 
-export async function createBoard(data: { title: string; userId: string }) {
+export async function createBoard(data: { title: string; userId: string; thumbnailUrl?: string }) {
+ 
   return await prisma.board.create({
     data: {
       title: data.title,
+      thumbnailUrl: data.thumbnailUrl ?? null,
       members: {
         create: {
           userId: data.userId,

@@ -23,7 +23,7 @@ model User {
 
 model Board {
   id    String @id @default(uuid())
-  title String
+  title String @unique
 
   members   BoardMember[]
   shapes    Shape[]
@@ -32,6 +32,7 @@ model Board {
   assets    Asset[]
   logs      AuditLog[]
   settings  BoardSettings?
+  thumbnailUrl String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

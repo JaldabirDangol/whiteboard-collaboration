@@ -2,16 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { X } from "lucide-react";
 import {
 	BoardMessage,
 	deleteBoardMessage,
 	getBoardMessages,
 	sendBoardMessage,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type ChatProps = {
 	boardId: string;
 	currentUserId?: string;
+	className?: string;
+	onClose?: () => void;
+	showMobileClose?: boolean;
+	showHeader?: boolean;
 };
 
 const getSocketUrl = () => {
@@ -31,7 +37,14 @@ const formatTimestamp = (dateLike: string) => {
 	return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
-export default function Chat({ boardId, currentUserId }: ChatProps) {
+export default function Chat({
+	boardId,
+	currentUserId,
+	className,
+	onClose,
+	showMobileClose = false,
+	showHeader = true,
+}: ChatProps) {
 	const [messages, setMessages] = useState<BoardMessage[]>([]);
 	const [input, setInput] = useState("");
 	const [loading, setLoading] = useState(true);
@@ -152,13 +165,28 @@ export default function Chat({ boardId, currentUserId }: ChatProps) {
 	};
 
 	return (
-		<aside className="h-full w-85 border-r border-slate-200 bg-slate-50/80 backdrop-blur-sm">
-			<div className="border-b border-slate-200 px-4 py-3">
-				<h2 className="text-sm font-semibold tracking-wide text-slate-900">Board Chat</h2>
-				<p className="mt-1 text-xs text-slate-500">{onlineCount} online now</p>
-			</div>
+		<aside className={cn("flex h-full w-full flex-col border-r border-slate-200 bg-slate-50/90 backdrop-blur", className)}>
+			{showHeader ? (
+				<div className="border-b border-slate-200 px-4 py-3">
+					<div className="flex items-center justify-between gap-2">
+						<div>
+							<h2 className="text-sm font-semibold tracking-wide text-slate-900">Board Chat</h2>
+							<p className="mt-1 text-xs text-slate-500">{onlineCount} online now</p>
+						</div>
+						{showMobileClose ? (
+							<button
+								type="button"
+								onClick={onClose}
+								className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 md:hidden"
+							>
+								<X className="h-4 w-4" />
+							</button>
+						) : null}
+					</div>
+				</div>
+			) : null}
 
-			<div ref={listRef} className="h-[calc(100%-130px)] space-y-3 overflow-y-auto px-4 py-4">
+			<div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
 				{loading ? <p className="text-sm text-slate-500">Loading messages...</p> : null}
 
 				{!loading && sortedMessages.length === 0 ? (

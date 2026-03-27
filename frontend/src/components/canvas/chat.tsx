@@ -75,7 +75,7 @@ export default function Chat({
 				if (!ignore) {
 					setMessages(data);
 				}
-			} catch (error) {
+			} catch {
 				if (!ignore) {
 					setMessages([]);
 				}
@@ -165,7 +165,7 @@ export default function Chat({
 	};
 
 	return (
-		<aside className={cn("flex h-full w-full flex-col border-r border-slate-200 bg-slate-50/90 backdrop-blur", className)}>
+		<aside className={cn("flex h-full w-full flex-col border-r border-slate-200 bg-slate-50/70", className)}>
 			{showHeader ? (
 				<div className="border-b border-slate-200 px-4 py-3">
 					<div className="flex items-center justify-between gap-2">
@@ -201,24 +201,24 @@ export default function Chat({
 						<div
 							key={message.id}
 							className={`max-w-[92%] rounded-xl px-3 py-2 shadow-sm ${
-								isMine ? "ml-auto bg-slate-900 text-white" : "bg-white text-slate-900"
+								isMine ? "ml-auto border border-indigo-200 bg-indigo-50 text-indigo-950" : "border border-slate-200 bg-white text-slate-900"
 							}`}
 						>
 							<div className="mb-1 flex items-center justify-between gap-2">
-								<span className={`text-[10px] font-medium ${isMine ? "text-slate-300" : "text-slate-500"}`}>
+								<span className={`text-[10px] font-medium ${isMine ? "text-indigo-700" : "text-slate-500"}`}>
 									{sender}
 								</span>
-								<span className={`text-[10px] ${isMine ? "text-slate-300" : "text-slate-500"}`}>
+								<span className={`text-[10px] ${isMine ? "text-indigo-700" : "text-slate-500"}`}>
 									{formatTimestamp(message.createdAt)}
 								</span>
 							</div>
-							  <p className="wrap-break-word text-sm leading-relaxed">{message.content}</p>
+							<p className="break-words text-sm leading-relaxed">{message.content}</p>
 
 							{isMine ? (
 								<button
 									type="button"
 									onClick={() => handleDelete(message)}
-									className="mt-2 text-[10px] text-rose-300 transition hover:text-rose-200"
+									className="mt-2 text-[10px] text-rose-600 transition hover:text-rose-700"
 								>
 									Delete
 								</button>
@@ -246,7 +246,7 @@ export default function Chat({
 						type="button"
 						onClick={handleSend}
 						disabled={sending || !input.trim()}
-						className="h-10 rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+						className="h-10 rounded-lg bg-indigo-600 px-4 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
 					>
 						Send
 					</button>

@@ -60,7 +60,11 @@ return res.status(200).json({ id: user.id, email: user.email, message: "Login su
 
 export async function Logout(req: Request, res: Response) {
   try {
-    res.clearCookie("token", { httpOnly: true, secure: true, sameSite: "strict" }) 
+        res.clearCookie("token", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+        }) 
     return res.status(200).json({ message: "Logged out" })
   } catch (error) {
     return res.status(500).json({ error: (error as Error).message })

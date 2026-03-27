@@ -4,12 +4,14 @@ import { useState } from "react";
 import { login } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import {toast} from "sonner";
+import { useUserStore } from "@/store/useUserStore";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const fetchCurrentUser = useUserStore((state) => state.fetchCurrentUser);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -18,13 +20,13 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const data = await login(email, password);
-      localStorage.setItem("token", data.token);
+      await login(email, password);
+      await fetchCurrentUser();
       toast.success("Login successful!");
       router.push("/boards"); 
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.error : "An unknown error occurred";
-      toast.error("Invalid email or password", errorMessage);
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

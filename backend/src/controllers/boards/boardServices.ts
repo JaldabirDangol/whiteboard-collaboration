@@ -207,3 +207,74 @@ export async function getShapes(boardId: string) {
     where: { boardId },
   });
 }
+
+const toShapeType = (value: unknown): "RECTANGLE" | "CIRCLE" | "LINE" | "DRAW" => {
+  const normalized = typeof value === "string" ? value.toLowerCase() : "";
+
+  if (normalized === "rectangle") return "RECTANGLE";
+  if (normalized === "circle") return "CIRCLE";
+  if (normalized === "line") return "LINE";
+  return "DRAW";
+};
+
+export async function getBoardShapesFromDatabase(boardId: string) {
+  const shapes = await prisma.shape.findMany({
+    where: { boardId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return shapes
+    .map((shape) => shape.data)
+    .filter((data) => typeof data === "object" && data !== null) as Record<string, unknown>[];
+}
+
+export async function replaceBoardShapes(
+  boardId: string,
+  userId: string,
+  shapes: Record<string, unknown>[]
+) {
+  const rows = shapes
+    .filter((shape) => typeof shape === "object" && shape !== null)
+    .map((shape) => ({
+      boardId,
+      userId,
+      type: toShapeType(shape.type),
+      data: shape as any,
+    }));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.shape.deleteMany({
+      where: { boardId },
+    });
+
+    if (rows.length > 0) {
+      await tx.shape.createMany({
+        data: rows,
+      });
+    }
+  });
+
+  return rows.length;
+}
+
+export async function getLatestBoardSnapshot(boardId: string) {
+  return await prisma.snapshot.findFirst({
+    where: { boardId },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
+
+export async function saveBoardSnapshot(boardId: string, data: unknown) {
+  const latest = await getLatestBoardSnapshot(boardId);
+  const nextVersion = latest ? latest.version + 1 : 1;
+
+  return await prisma.snapshot.create({
+    data: {
+      boardId,
+      version: nextVersion,
+      data: data as any,
+    },
+  });
+}

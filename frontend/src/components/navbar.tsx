@@ -11,12 +11,17 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiUrl } from "@/constant";
 import { toast } from "sonner";
+import { logout } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { useUserStore } from "@/store/useUserStore";
 
 
 const Navbar = () => {
   const [title, setTitle] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const clearUser = useUserStore((state) => state.clearUser);
 
   const queryClient = useQueryClient();
   const createBoard = useMutation({
@@ -54,6 +59,19 @@ const Navbar = () => {
   }
 });
 
+  const logoutMutation = useMutation({
+    mutationFn: logout,
+    onSuccess: () => {
+      clearUser();
+      queryClient.clear();
+      toast.success("Logged out");
+      router.replace("/login");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to logout");
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()){
@@ -64,12 +82,21 @@ const Navbar = () => {
   };
 
   return (
-    <div className="flex justify-between">
+    <div className="flex justify-between items-center gap-3">
       <input
         type="text"
         placeholder="Search..."
         className="border rounded px-4 py-2 w-64"
       />
+
+      <button
+        type="button"
+        onClick={() => logoutMutation.mutate()}
+        disabled={logoutMutation.isPending}
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
+      >
+        {logoutMutation.isPending ? "Logging out..." : "Logout"}
+      </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger className="py-2 px-4 rounded-sm shadow-sm bg-blue-900 text-white">

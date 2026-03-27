@@ -5,6 +5,7 @@ const boardRoutes:Router = Router();
 
 boardRoutes.post("/create", boardController.createBoard);
 boardRoutes.get("/user", boardController.getBoardsForUser);
+boardRoutes.get("/:id/shapes", boardController.getBoardShapes);
 boardRoutes.post("/:id/join", boardController.joinBoard);
 boardRoutes.post("/:id/share", boardController.shareBoard);
 boardRoutes.get("/:id", boardController.getBoard);

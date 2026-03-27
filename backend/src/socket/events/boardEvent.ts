@@ -1,8 +1,87 @@
 import { Server, Socket } from "socket.io";
 import * as Y from "yjs";
 import { getYDoc } from "@/socket/yjs.js" // Path to the file above
+import {
+  getBoardShapesFromDatabase,
+  getLatestBoardSnapshot,
+  replaceBoardShapes,
+  saveBoardSnapshot,
+} from "@/controllers/boards/boardServices.js";
 
 const undoManagers = new Map<string, Y.UndoManager>();
+
+const SHAPES_KEY = "shapes";
+
+const toUint8 = (value: unknown): Uint8Array => {
+  if (value instanceof Uint8Array) return value;
+  if (Array.isArray(value)) return new Uint8Array(value);
+  if (value && typeof value === "object") {
+    const arrLike = value as { data?: number[] };
+    if (Array.isArray(arrLike.data)) {
+      return new Uint8Array(arrLike.data);
+    }
+  }
+  return new Uint8Array();
+};
+
+const parseShapesFromYDoc = (doc: Y.Doc) => {
+  const boardMap = doc.getMap<string>("board");
+  const rawShapes = boardMap.get(SHAPES_KEY);
+
+  if (!rawShapes || typeof rawShapes !== "string") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawShapes);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const hydrateDocFromPersistence = async (boardId: string, doc: Y.Doc) => {
+  const boardMap = doc.getMap<string>("board");
+  const inMemoryShapes = parseShapesFromYDoc(doc);
+
+  // If we already have in-memory content, keep it as source of truth.
+  if (inMemoryShapes.length > 0) {
+    return;
+  }
+
+  const shapesFromDb = await getBoardShapesFromDatabase(boardId);
+  if (shapesFromDb.length > 0) {
+    boardMap.set(SHAPES_KEY, JSON.stringify(shapesFromDb));
+    return;
+  }
+
+  const latestSnapshot = await getLatestBoardSnapshot(boardId);
+  if (!latestSnapshot || typeof latestSnapshot.data !== "object" || latestSnapshot.data === null) {
+    return;
+  }
+
+  const snapshotData = latestSnapshot.data as { shapes?: unknown };
+  const shapes = Array.isArray(snapshotData.shapes) ? snapshotData.shapes : [];
+
+  if (shapes.length === 0) {
+    return;
+  }
+
+  boardMap.set(SHAPES_KEY, JSON.stringify(shapes));
+};
+
+const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string) => {
+  try {
+    const shapes = parseShapesFromYDoc(doc);
+    await saveBoardSnapshot(boardId, { shapes });
+
+    if (userId) {
+      await replaceBoardShapes(boardId, userId, shapes as Record<string, unknown>[]);
+    }
+  } catch (error) {
+    console.error("[board:persist] immediate persist failed", { boardId, error });
+  }
+};
 
 const getUndoManager = (boardId: string, doc: Y.Doc) => {
   if (undoManagers.has(boardId)) {
@@ -18,7 +97,7 @@ const getUndoManager = (boardId: string, doc: Y.Doc) => {
 export const registerBoardEvents = (io: Server, socket: Socket) => {
   let activeBoardId: string | null = null;
 
-  socket.on("board:join", (boardId: string) => {
+  socket.on("board:join", async (boardId: string) => {
     try {
       if (activeBoardId && activeBoardId !== boardId) {
         socket.leave(activeBoardId);
@@ -27,6 +106,7 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       activeBoardId = boardId;
       socket.join(boardId);
       const doc = getYDoc(boardId);
+      await hydrateDocFromPersistence(boardId, doc);
       getUndoManager(boardId, doc);
 
       // 1. Initial Sync: Send the full current state to the new user
@@ -44,7 +124,46 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
     }
   });
 
-  socket.on("board:leave", (boardId: string) => {
+  // 2. Continuous Sync: The "Holy Grail" event
+  socket.on("yjs:update", async ({ boardId, update }: { boardId: string, update: unknown }) => {
+    const doc = getYDoc(boardId);
+    const normalizedUpdate = toUint8(update);
+    if (normalizedUpdate.length === 0) {
+      return;
+    }
+
+    // Apply the change to the server's version of the doc
+    Y.applyUpdate(doc, normalizedUpdate);
+
+    // Broadcast that specific change to everyone else in the room
+    socket.to(boardId).emit("yjs:update", Array.from(normalizedUpdate));
+    await persistBoardStateNow(boardId, doc, socket.data.user?.id);
+  });
+
+  socket.on("board:undo", async ({ boardId }: { boardId: string }) => {
+    const doc = getYDoc(boardId);
+    const undoManager = getUndoManager(boardId, doc);
+
+    undoManager.undo();
+    const state = Y.encodeStateAsUpdate(doc);
+    io.to(boardId).emit("board:state", state);
+    await persistBoardStateNow(boardId, doc, socket.data.user?.id);
+  });
+
+  socket.on("board:redo", async ({ boardId }: { boardId: string }) => {
+    const doc = getYDoc(boardId);
+    const undoManager = getUndoManager(boardId, doc);
+
+    undoManager.redo();
+    const state = Y.encodeStateAsUpdate(doc);
+    io.to(boardId).emit("board:state", state);
+    await persistBoardStateNow(boardId, doc, socket.data.user?.id);
+  });
+
+  socket.on("board:leave", async (boardId: string) => {
+    const doc = getYDoc(boardId);
+    await persistBoardStateNow(boardId, doc, socket.data.user?.id);
+
     socket.leave(boardId);
     if (activeBoardId === boardId) {
       activeBoardId = null;
@@ -55,37 +174,11 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
     });
   });
 
-  // 2. Continuous Sync: The "Holy Grail" event
-  socket.on("yjs:update", ({ boardId, update }: { boardId: string, update: Uint8Array }) => {
-    const doc = getYDoc(boardId);
-
-    // Apply the change to the server's version of the doc
-    Y.applyUpdate(doc, new Uint8Array(update));
-
-    // Broadcast that specific change to everyone else in the room
-    socket.to(boardId).emit("yjs:update", update);
-  });
-
-  socket.on("board:undo", ({ boardId }: { boardId: string }) => {
-    const doc = getYDoc(boardId);
-    const undoManager = getUndoManager(boardId, doc);
-
-    undoManager.undo();
-    const state = Y.encodeStateAsUpdate(doc);
-    io.to(boardId).emit("board:state", state);
-  });
-
-  socket.on("board:redo", ({ boardId }: { boardId: string }) => {
-    const doc = getYDoc(boardId);
-    const undoManager = getUndoManager(boardId, doc);
-
-    undoManager.redo();
-    const state = Y.encodeStateAsUpdate(doc);
-    io.to(boardId).emit("board:state", state);
-  });
-
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     if (!activeBoardId) return;
+
+    const doc = getYDoc(activeBoardId);
+    await persistBoardStateNow(activeBoardId, doc, socket.data.user?.id);
 
     socket.to(activeBoardId).emit("board:userLeft", {
       userId: socket.data.user?.id ?? socket.id,

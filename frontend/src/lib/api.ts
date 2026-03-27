@@ -26,11 +26,26 @@ export async function login(email: string, password: string) {
     body: JSON.stringify({ email, password }),
   });
 
+  const json = await res.json();
   if (!res.ok) {
-    throw new Error("Login failed");
+    throw new Error(json?.error || "Login failed");
   }
 
-  return res.json();
+  return json;
+}
+
+export async function logout() {
+  const res = await fetch(`${apiUrl}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Logout failed");
+  }
+
+  return json;
 }
 
 
@@ -160,4 +175,17 @@ export async function getBoardDetails(boardId: string): Promise<BoardDetails> {
   }
 
   return json;
+}
+
+export async function getPersistedBoardShapes(boardId: string) {
+  const res = await fetch(`${apiUrl}/boards/${boardId}/shapes`, {
+    credentials: "include",
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Failed to load board shapes");
+  }
+
+  return Array.isArray(json?.shapes) ? json.shapes : [];
 }

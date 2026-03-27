@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { signup } from "@/lib/api";
 import {toast} from "sonner";
+import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const handleSignup = async () => {
     if (!email || !password) {
@@ -18,6 +20,7 @@ export default function SignupPage() {
     try {
       await signup(email, password);
       toast.success("Account created successfully!");
+      router.push("/login");
     } catch (err) {
       toast.error("Signup failed. Please try again.");
     } finally {

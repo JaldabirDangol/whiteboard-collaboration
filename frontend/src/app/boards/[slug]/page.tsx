@@ -4,13 +4,13 @@ import { useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import Header from "@/components/canvas/header";
 import Chat from "@/components/canvas/chat";
-import { useAuth } from "@/context/authContext";
+import { useUserStore } from "@/store/useUserStore";
 
 export default function Page() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const params = useParams();
   const id = params.slug as string;
-  const { user } = useAuth();
+  const user = useUserStore((state) => state.user);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -59,7 +59,7 @@ export default function Page() {
     <div className="h-screen flex flex-col">
       <Header />
       <div className="flex gap-6 flex-1">
-        <Chat boardId={id} currentUserId={user?.userId} />
+        <Chat boardId={id} currentUserId={user?.id} />
       <canvas
         ref={canvasRef}
         style={{ width: "100vw", height: "100vh", display: "block" }}

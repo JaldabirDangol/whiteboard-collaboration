@@ -1,7 +1,7 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useAuth } from "@/context/authContext";
+import { useUserStore } from "@/store/useUserStore";
 import { motion } from "motion/react";
 import Link from "next/link";
 import {useRouter} from "next/navigation";
@@ -9,7 +9,7 @@ import { useEffect } from "react";
 
 export default function LandingPage() {
   const router = useRouter();
-  const user = useAuth().user;
+  const user = useUserStore((state) => state.user);
   console.log("User in landing page:", user);
    useEffect(() => {
     if (user) {
@@ -18,7 +18,7 @@ export default function LandingPage() {
     }
   }, [user, router]);
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white">
+    <div className="min-h-screen bg-linear-to-br from-gray-900 to-black text-white">
       {/* Header */}
       <header className="flex items-center justify-between px-8 py-4 border-b border-gray-800">
         <h1 className="text-2xl font-bold">WhiteboardX</h1>

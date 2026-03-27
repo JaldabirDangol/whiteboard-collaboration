@@ -98,3 +98,66 @@ export async function deleteBoardMessage(messageId: string, boardId: string): Pr
     throw new Error("Failed to delete message");
   }
 }
+
+export async function joinBoard(boardId: string) {
+  const res = await fetch(`${apiUrl}/boards/${boardId}/join`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Failed to join board");
+  }
+
+  return json;
+}
+
+export async function shareBoard(boardId: string, email: string, role: "EDITOR" | "VIEWER") {
+  const res = await fetch(`${apiUrl}/boards/${boardId}/share`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({ email, role }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Failed to share board");
+  }
+
+  return json;
+}
+
+export type BoardMemberWithUser = {
+  id: string;
+  userId: string;
+  boardId: string;
+  role: "ADMIN" | "EDITOR" | "VIEWER";
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+  };
+};
+
+export type BoardDetails = {
+  id: string;
+  title: string;
+  members: BoardMemberWithUser[];
+};
+
+export async function getBoardDetails(boardId: string): Promise<BoardDetails> {
+  const res = await fetch(`${apiUrl}/boards/${boardId}`, {
+    credentials: "include",
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Failed to load board details");
+  }
+
+  return json;
+}

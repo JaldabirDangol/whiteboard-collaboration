@@ -19,7 +19,30 @@ export async function createBoard(data: { title: string; userId: string; thumbna
 export async function getBoard(id: string) {
   return await prisma.board.findUnique({
     where: { id },
-    include: { members: true },
+    include: {
+      members: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+export async function getBoardMember(boardId: string, userId: string) {
+  return await prisma.boardMember.findUnique({
+    where: {
+      userId_boardId: {
+        userId,
+        boardId,
+      },
+    },
   });
 }
 
@@ -63,6 +86,77 @@ export async function removeMember(boardId: string, userId: string) {
       userId_boardId: { userId, boardId },
     },
   });
+}
+
+export async function joinBoard(boardId: string, userId: string) {
+  const board = await prisma.board.findUnique({
+    where: { id: boardId },
+    select: { id: true, title: true },
+  });
+
+  if (!board) {
+    throw new Error("Board not found");
+  }
+
+  const member = await prisma.boardMember.upsert({
+    where: {
+      userId_boardId: {
+        userId,
+        boardId,
+      },
+    },
+    update: {},
+    create: {
+      userId,
+      boardId,
+      role: "VIEWER",
+    },
+  });
+
+  return { board, member };
+}
+
+export async function shareBoardWithEmail(
+  boardId: string,
+  ownerUserId: string,
+  email: string,
+  role: "EDITOR" | "VIEWER"
+) {
+  const membership = await getBoardMember(boardId, ownerUserId);
+  if (!membership || membership.role !== "ADMIN") {
+    throw new Error("Only board admins can share this board");
+  }
+
+  const targetUser = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
+    select: { id: true, email: true, name: true },
+  });
+
+  if (!targetUser) {
+    throw new Error("User with this email does not exist");
+  }
+
+  const member = await prisma.boardMember.upsert({
+    where: {
+      userId_boardId: {
+        userId: targetUser.id,
+        boardId,
+      },
+    },
+    update: {
+      role,
+    },
+    create: {
+      userId: targetUser.id,
+      boardId,
+      role,
+    },
+  });
+
+  return {
+    member,
+    user: targetUser,
+  };
 }
 
 export async function getBoardData(boardId: string) {

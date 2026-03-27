@@ -33,7 +33,7 @@ const tools: Tool[] = [
 ];
 
 export default function Header() {
-  const { tool, setTool } = useToolStore();
+  const { selected, setTool } = useToolStore();
 
   return (
     <div className="sticky top-4 px-6 max-w-300 mx-auto container p-2 z-50 flex gap-2 bg-white shadow-sm border-gray-400 rounded-2xl">
@@ -45,7 +45,7 @@ export default function Header() {
             key={t.tool}
             onClick={() => setTool(t.tool)}
             className={`px-3 py-1 rounded flex items-center gap-2 ${
-              tool === t.tool ? "bg-black text-white" : "bg-gray-200"
+              selected === t.tool ? "bg-black text-white" : "bg-gray-200"
             }`}
           >
             <Icon className="w-4 h-4" />

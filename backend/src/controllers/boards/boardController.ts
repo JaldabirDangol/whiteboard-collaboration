@@ -28,7 +28,15 @@ export async function createBoard(req: Request, res: Response) {
 export async function getBoard(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const userId = req.user?.id;
     if (!id) return res.status(400).json({ error: "Board ID is required" });
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const membership = await boardService.getBoardMember(id as string, userId);
+    if (!membership) {
+      return res.status(403).json({ error: "You do not have access to this board" });
+    }
+
     const board = await boardService.getBoard(id as string);
     if (!board) return res.status(404).json({ error: "Board not found" });
    
@@ -62,8 +70,71 @@ export async function updateBoardMember(req: Request, res: Response) {
       return res.status(400).json({ error: "Board ID and User ID are required" });
     }
 
-    const member = await boardService.updateBoardMember(boardId as string, userId, role || "MEMBER");
+    const member = await boardService.updateBoardMember(boardId as string, userId, role || "VIEWER");
     return res.json({ message: "Member updated successfully", member });
+  } catch (error) {
+    return res.status(400).json({ error: (error as Error).message });
+  }
+}
+
+export async function shareBoard(req: Request, res: Response) {
+  try {
+    const { id: boardIdParam } = req.params;
+    const ownerUserId = req.user?.id;
+    const { email, role } = req.body as { email?: string; role?: "EDITOR" | "VIEWER" };
+    const boardId = Array.isArray(boardIdParam) ? boardIdParam[0] : boardIdParam;
+
+    if (!boardId) {
+      return res.status(400).json({ error: "Board ID is required" });
+    }
+
+    if (!ownerUserId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    const nextRole = role === "EDITOR" ? "EDITOR" : "VIEWER";
+
+    const result = await boardService.shareBoardWithEmail(
+      boardId,
+      ownerUserId,
+      email.trim().toLowerCase(),
+      nextRole
+    );
+
+    return res.json({
+      message: "Board shared successfully",
+      member: result.member,
+      user: result.user,
+    });
+  } catch (error) {
+    return res.status(400).json({ error: (error as Error).message });
+  }
+}
+
+export async function joinBoard(req: Request, res: Response) {
+  try {
+    const { id: boardIdParam } = req.params;
+    const userId = req.user?.id;
+    const boardId = Array.isArray(boardIdParam) ? boardIdParam[0] : boardIdParam;
+
+    if (!boardId) {
+      return res.status(400).json({ error: "Board ID is required" });
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const result = await boardService.joinBoard(boardId, userId);
+    return res.json({
+      message: "Joined board successfully",
+      board: result.board,
+      member: result.member,
+    });
   } catch (error) {
     return res.status(400).json({ error: (error as Error).message });
   }

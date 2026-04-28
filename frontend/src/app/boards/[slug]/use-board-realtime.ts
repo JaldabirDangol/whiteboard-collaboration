@@ -39,6 +39,8 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
   const [shapes, setShapes] = useState<BoardShape[]>([]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
+  const [serverReadOnly, setServerReadOnly] = useState(false);
+  const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
 
   const persistShapes = useCallback((nextShapes: BoardShape[]) => {
     const doc = docRef.current;
@@ -78,9 +80,11 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     const socket = socketRef.current;
     if (!socket) return false;
 
+    if (serverReadOnly) return false;
+
     socket.emit(type === "undo" ? "board:undo" : "board:redo", { boardId });
     return true;
-  }, [boardId]);
+  }, [boardId, serverReadOnly]);
 
   useEffect(() => {
     if (!persistedShapes || persistedShapes.length === 0) return;
@@ -170,10 +174,16 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       });
     };
 
+    const onBoardForbidden = ({ message }: { message?: string }) => {
+      setServerReadOnly(true);
+      setForbiddenMessage(message || "You only have viewer access on this board");
+    };
+
     doc.on("update", onDocUpdate);
     socket.on("board:init", onInit);
     socket.on("yjs:update", onUpdate);
     socket.on("board:state", onState);
+    socket.on("board:forbidden", onBoardForbidden);
     socket.on("presence:cursorMove", onCursorMove);
     socket.on("board:userLeft", onUserLeft);
     socket.on("presence:userOffline", onUserLeft);
@@ -185,6 +195,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       socket.off("board:init", onInit);
       socket.off("yjs:update", onUpdate);
       socket.off("board:state", onState);
+      socket.off("board:forbidden", onBoardForbidden);
       socket.off("presence:cursorMove", onCursorMove);
       socket.off("board:userLeft", onUserLeft);
       socket.off("presence:userOffline", onUserLeft);
@@ -236,7 +247,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
         socket.emit("board:undo", { boardId });
       }
 
-      if (key === "y" || (key === "z" && event.shiftKey)) {
+      if (key === "y" || key === "r" || (key === "z" && event.shiftKey)) {
         event.preventDefault();
         socket.emit("board:redo", { boardId });
       }
@@ -254,5 +265,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     updateShapesLocally,
     emitCursorMove,
     emitHistoryEvent,
+    serverReadOnly,
+    forbiddenMessage,
   };
 };

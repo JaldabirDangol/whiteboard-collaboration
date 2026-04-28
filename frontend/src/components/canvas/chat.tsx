@@ -128,10 +128,16 @@ export default function Chat({
 			setOnlineCount((prev) => Math.max(1, prev - 1));
 		};
 
+		const onPresenceState = ({ userIds }: { boardId?: string; userIds?: string[] }) => {
+			if (!Array.isArray(userIds)) return;
+			setOnlineCount(Math.max(1, new Set(userIds).size));
+		};
+
 		socket.on("messageSent", onMessageSent);
 		socket.on("messageDeleted", onMessageDeleted);
 		socket.on("presence:userOnline", onUserOnline);
 		socket.on("presence:userOffline", onUserOffline);
+		socket.on("presence:state", onPresenceState);
 
 		return () => {
 			socket.emit("presence:leave", { boardId });
@@ -140,6 +146,7 @@ export default function Chat({
 			socket.off("messageDeleted", onMessageDeleted);
 			socket.off("presence:userOnline", onUserOnline);
 			socket.off("presence:userOffline", onUserOffline);
+			socket.off("presence:state", onPresenceState);
 			socket.disconnect();
 		};
 	}, [boardId]);

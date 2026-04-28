@@ -85,9 +85,19 @@ export async function updateBoardMember(req: Request, res: Response) {
   try {
     const { id: boardId } = req.params;
     const { userId, role } = req.body;
+    const actorUserId = req.user?.id;
 
     if (!boardId || !userId) {
       return res.status(400).json({ error: "Board ID and User ID are required" });
+    }
+
+    if (!actorUserId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const actorMembership = await boardService.getBoardMember(boardId as string, actorUserId);
+    if (!actorMembership || actorMembership.role !== "ADMIN") {
+      return res.status(403).json({ error: "Only board admins can update member roles" });
     }
 
     const member = await boardService.updateBoardMember(boardId as string, userId, role || "VIEWER");
@@ -163,7 +173,15 @@ export async function joinBoard(req: Request, res: Response) {
 export async function deleteBoard(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const actorUserId = req.user?.id;
+
     if (!id) return res.status(400).json({ error: "Board ID is required" });
+    if (!actorUserId) return res.status(401).json({ error: "Unauthorized" });
+
+    const actorMembership = await boardService.getBoardMember(id as string, actorUserId);
+    if (!actorMembership || actorMembership.role !== "ADMIN") {
+      return res.status(403).json({ error: "Only board admins can delete this board" });
+    }
 
     const board = await boardService.deleteBoard(id as string);
     return res.json({

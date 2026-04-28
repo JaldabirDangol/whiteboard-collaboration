@@ -19,6 +19,7 @@ import BoardRightPanel from "./board-right-panel";
 import BoardMobileChat from "./board-mobile-chat";
 import { useBoardRealtime } from "./use-board-realtime";
 import { useBoardCanvasInteractions } from "./use-board-canvas-interactions";
+import type { ToolType } from "@/store/useToolStore";
 
 export default function Page() {
   const params = useParams();
@@ -70,11 +71,20 @@ export default function Page() {
     updateShapesLocally,
     emitCursorMove,
     emitHistoryEvent,
+    serverReadOnly,
+    forbiddenMessage,
   } = useBoardRealtime({
     boardId: id,
     userId: user?.id,
     persistedShapes,
   });
+
+  const currentMembership = useMemo(
+    () => boardDetails?.members?.find((member) => member.userId === user?.id) ?? null,
+    [boardDetails?.members, user?.id]
+  );
+  const canEditBoard = (currentMembership?.role === "ADMIN" || currentMembership?.role === "EDITOR") && !serverReadOnly;
+  const activeCanvasTool: ToolType = canEditBoard ? selectedTool : "select";
 
   const {
     zoom,
@@ -88,7 +98,7 @@ export default function Page() {
     normalizeRect,
     updateShapePosition,
   } = useBoardCanvasInteractions({
-    selectedTool,
+    selectedTool: activeCanvasTool,
     color,
     strokeWidth,
     setShapes,
@@ -156,6 +166,11 @@ export default function Page() {
   };
 
   const requestHistoryEvent = (type: "undo" | "redo") => {
+    if (!canEditBoard) {
+      toast.error("You have viewer access. Editing actions are disabled.");
+      return;
+    }
+
     const ok = emitHistoryEvent(type);
     if (!ok) {
       toast.error("Board connection is not ready yet");
@@ -207,6 +222,12 @@ export default function Page() {
   };
 
   const handleFileImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (!canEditBoard) {
+      toast.error("You have viewer access. Import is disabled.");
+      event.target.value = "";
+      return;
+    }
+
     const file = event.target.files?.[0];
     event.target.value = "";
 
@@ -263,6 +284,11 @@ export default function Page() {
   };
 
   const onTopTabClick = (tab: (typeof topTabs)[number]) => {
+    if (!canEditBoard && tab === "Files") {
+      toast.error("You have viewer access. Import is disabled.");
+      return;
+    }
+
     setActiveTopTab(tab);
 
     if (tab === "Files") {
@@ -303,10 +329,21 @@ export default function Page() {
   }, [loading, user, router]);
 
   useEffect(() => {
-    if (useToolStore.getState().selected === "select") {
+    if (canEditBoard && useToolStore.getState().selected === "select") {
       setTool("pen");
     }
-  }, [setTool]);
+  }, [canEditBoard, setTool]);
+
+  useEffect(() => {
+    if (!canEditBoard && selectedTool !== "select") {
+      setTool("select");
+    }
+  }, [canEditBoard, selectedTool, setTool]);
+
+  useEffect(() => {
+    if (!forbiddenMessage) return;
+    toast.error(forbiddenMessage);
+  }, [forbiddenMessage]);
 
   useEffect(() => {
     const element = boardWrapRef.current;
@@ -340,6 +377,7 @@ export default function Page() {
 
       <BoardTopBar
         boardTitle={boardDetails?.title || "Project Draft"}
+        isViewOnly={!canEditBoard}
         topTabs={topTabs}
         activeTopTab={activeTopTab}
         onTopTabClick={onTopTabClick}
@@ -388,12 +426,12 @@ export default function Page() {
 
       <div className="relative flex min-h-0 flex-1">
         <aside className="hidden w-20 border-r border-slate-200 bg-white md:flex md:items-start md:justify-center">
-          <Header layout="vertical" />
+          <Header layout="vertical" disabled={!canEditBoard} />
         </aside>
 
         <main ref={boardWrapRef} className="relative min-w-0 flex-1 bg-[radial-gradient(circle_at_1px_1px,#dbe4ef_1px,transparent_1.3px)] bg-size-[20px_20px]">
           <div className="absolute left-2 top-2 z-20 md:hidden">
-            <Header />
+            <Header disabled={!canEditBoard} />
           </div>
 
           <Stage
@@ -411,7 +449,7 @@ export default function Page() {
             onTouchCancel={handlePointerUp}
             onWheel={handleWheel}
             onMouseDownCapture={() => {
-              if (selectedTool === "select") {
+              if (activeCanvasTool === "select") {
                 setSelectedShapeId(null);
               }
             }}
@@ -429,10 +467,11 @@ export default function Page() {
                         tension={0.5}
                         lineCap="round"
                         lineJoin="round"
-                        draggable={selectedTool === "select"}
+                        draggable={canEditBoard && selectedTool === "select"}
                         onClick={() => setSelectedShapeId(shape.id)}
                         onTap={() => setSelectedShapeId(shape.id)}
                         onDragEnd={(event) => {
+                          if (!canEditBoard || selectedTool !== "select") return;
                           const pos = event.target.position();
                           updateShapePosition(shape.id, pos.x, pos.y);
                           event.target.position({ x: 0, y: 0 });
@@ -459,10 +498,11 @@ export default function Page() {
                         stroke={rect.color}
                         strokeWidth={rect.strokeWidth}
                         fill="transparent"
-                        draggable={selectedTool === "select"}
+                        draggable={canEditBoard && selectedTool === "select"}
                         onClick={() => setSelectedShapeId(shape.id)}
                         onTap={() => setSelectedShapeId(shape.id)}
                         onDragEnd={(event) => {
+                          if (!canEditBoard || selectedTool !== "select") return;
                           const pos = event.target.position();
                           updateShapePosition(shape.id, pos.x, pos.y);
                         }}
@@ -482,10 +522,11 @@ export default function Page() {
                       stroke={shape.color}
                       strokeWidth={shape.strokeWidth}
                       fill="transparent"
-                      draggable={selectedTool === "select"}
+                      draggable={canEditBoard && selectedTool === "select"}
                       onClick={() => setSelectedShapeId(shape.id)}
                       onTap={() => setSelectedShapeId(shape.id)}
                       onDragEnd={(event) => {
+                        if (!canEditBoard || selectedTool !== "select") return;
                         const pos = event.target.position();
                         updateShapePosition(shape.id, pos.x, pos.y);
                       }}

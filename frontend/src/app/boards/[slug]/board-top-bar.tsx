@@ -7,6 +7,7 @@ type TopTab = "Files" | "Canvas" | "Export" | "History";
 
 type BoardTopBarProps = {
   boardTitle: string;
+  isViewOnly: boolean;
   topTabs: readonly TopTab[];
   activeTopTab: TopTab;
   onTopTabClick: (tab: TopTab) => void;
@@ -48,6 +49,7 @@ type BoardTopBarProps = {
 
 export default function BoardTopBar({
   boardTitle,
+  isViewOnly,
   topTabs,
   activeTopTab,
   onTopTabClick,
@@ -90,6 +92,16 @@ export default function BoardTopBar({
     <div className="z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-3 md:px-4">
       <div className="flex min-w-0 items-center gap-3">
         <p className="truncate text-sm font-semibold text-slate-900">{boardTitle}</p>
+        <span
+          className={`hidden rounded-full px-2 py-0.5 text-[11px] font-medium md:inline-flex ${
+            isViewOnly
+              ? "bg-amber-100 text-amber-800"
+              : "bg-emerald-100 text-emerald-800"
+          }`}
+          title={isViewOnly ? "You can view but cannot edit this board" : "You can edit this board"}
+        >
+          {isViewOnly ? "View only" : "Can edit"}
+        </span>
         <div className="hidden items-center gap-4 text-sm md:flex">
           {topTabs.map((tab) => (
             <button
@@ -192,7 +204,7 @@ export default function BoardTopBar({
                   Redo
                 </Button>
               </div>
-              <p className="text-xs text-slate-500">Shortcuts: Ctrl/Cmd + Z for undo, Ctrl/Cmd + Shift + Z for redo.</p>
+              <p className="text-xs text-slate-500">Shortcuts: Ctrl/Cmd + Z for undo, Ctrl/Cmd + Y or Ctrl/Cmd + R or Ctrl/Cmd + Shift + Z for redo.</p>
             </div>
           </DialogContent>
         </Dialog>
@@ -275,7 +287,7 @@ export default function BoardTopBar({
               <li>Hold Space and drag to pan.</li>
               <li>Ctrl/Cmd + wheel to zoom.</li>
               <li>Ctrl/Cmd + Z to undo.</li>
-              <li>Ctrl/Cmd + Shift + Z to redo.</li>
+              <li>Ctrl/Cmd + Y or Ctrl/Cmd + R or Ctrl/Cmd + Shift + Z to redo.</li>
             </ul>
           </DialogContent>
         </Dialog>

@@ -7,10 +7,12 @@ import {
   replaceBoardShapes,
   saveBoardSnapshot,
 } from "@/controllers/boards/boardServices.js";
+import { canAccessBoard, canEditBoard } from "@/socket/boardAccess.js";
 
 const undoManagers = new Map<string, Y.UndoManager>();
 
 const SHAPES_KEY = "shapes";
+const CLIENT_UPDATE_ORIGIN = "client-update";
 
 const toUint8 = (value: unknown): Uint8Array => {
   if (value instanceof Uint8Array) return value;
@@ -89,7 +91,9 @@ const getUndoManager = (boardId: string, doc: Y.Doc) => {
   }
 
   const boardMap = doc.getMap("board");
-  const undoManager = new Y.UndoManager(boardMap);
+  const undoManager = new Y.UndoManager(boardMap, {
+    trackedOrigins: new Set([CLIENT_UPDATE_ORIGIN]),
+  });
   undoManagers.set(boardId, undoManager);
   return undoManager;
 };
@@ -99,6 +103,12 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
 
   socket.on("board:join", async (boardId: string) => {
     try {
+      const canAccess = await canAccessBoard(socket, boardId);
+      if (!canAccess) {
+        socket.emit("error", { message: "You do not have access to this board" });
+        return;
+      }
+
       if (activeBoardId && activeBoardId !== boardId) {
         socket.leave(activeBoardId);
       }
@@ -126,6 +136,15 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
 
   // 2. Continuous Sync: The "Holy Grail" event
   socket.on("yjs:update", async ({ boardId, update }: { boardId: string, update: unknown }) => {
+    const canEdit = await canEditBoard(socket, boardId);
+    if (!canEdit) {
+      socket.emit("board:forbidden", {
+        boardId,
+        message: "You need editor access to modify this board",
+      });
+      return;
+    }
+
     const doc = getYDoc(boardId);
     const normalizedUpdate = toUint8(update);
     if (normalizedUpdate.length === 0) {
@@ -133,7 +152,7 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
     }
 
     // Apply the change to the server's version of the doc
-    Y.applyUpdate(doc, normalizedUpdate);
+    Y.applyUpdate(doc, normalizedUpdate, CLIENT_UPDATE_ORIGIN);
 
     // Broadcast that specific change to everyone else in the room
     socket.to(boardId).emit("yjs:update", Array.from(normalizedUpdate));
@@ -141,6 +160,15 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
   });
 
   socket.on("board:undo", async ({ boardId }: { boardId: string }) => {
+    const canEdit = await canEditBoard(socket, boardId);
+    if (!canEdit) {
+      socket.emit("board:forbidden", {
+        boardId,
+        message: "You need editor access to modify this board",
+      });
+      return;
+    }
+
     const doc = getYDoc(boardId);
     const undoManager = getUndoManager(boardId, doc);
 
@@ -151,6 +179,15 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
   });
 
   socket.on("board:redo", async ({ boardId }: { boardId: string }) => {
+    const canEdit = await canEditBoard(socket, boardId);
+    if (!canEdit) {
+      socket.emit("board:forbidden", {
+        boardId,
+        message: "You need editor access to modify this board",
+      });
+      return;
+    }
+
     const doc = getYDoc(boardId);
     const undoManager = getUndoManager(boardId, doc);
 

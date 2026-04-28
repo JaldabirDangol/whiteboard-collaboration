@@ -11,6 +11,7 @@ type Tool = {
 
 type HeaderProps = {
   layout?: "horizontal" | "vertical";
+  disabled?: boolean;
 };
 
 const STROKE_MIN = 1;
@@ -40,7 +41,7 @@ const tools: Tool[] = [
   },
 ];
 
-export default function Header({ layout = "horizontal" }: HeaderProps) {
+export default function Header({ layout = "horizontal", disabled = false }: HeaderProps) {
   const { selected, color, strokeWidth, setTool, setColor, setStrokeWidth } = useToolStore();
   const setStroke = (next: number) => {
     const value = Number.isFinite(next) ? next : STROKE_MIN;
@@ -52,7 +53,9 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
 
   if (layout === "vertical") {
     return (
-      <div className="pointer-events-auto mt-3 flex h-[calc(100%-1.5rem)] w-16 flex-col items-center rounded-3xl py-3 shadow-sm">
+      <div className={`pointer-events-auto mt-3 flex h-[calc(100%-1.5rem)] w-16 flex-col items-center rounded-3xl py-3 shadow-sm ${
+        disabled ? "opacity-70" : ""
+      }`}>
         <div className="flex flex-col items-center gap-2.5">
           {tools.map((t) => {
             const Icon = t.icon;
@@ -61,9 +64,13 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
               <button
                 key={t.tool}
                 type="button"
+                disabled={disabled}
                 onClick={() => setTool(t.tool)}
                 title={t.tool}
                 className={`grid h-11 w-11 place-items-center rounded-2xl transition ${
+                  disabled
+                    ? "cursor-not-allowed bg-slate-100 text-slate-400"
+                    :
                   selected === t.tool
                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
                     : "bg-slate-100 text-slate-500 hover:bg-slate-200"
@@ -80,6 +87,7 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
         <input
           aria-label="Stroke color"
           type="color"
+          disabled={disabled}
           value={color}
           onChange={(event) => setColor(event.target.value)}
           className="h-9 w-9 cursor-pointer rounded-xl border border-slate-300 bg-transparent p-1"
@@ -88,6 +96,7 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
         <input
           aria-label="Stroke width"
           type="range"
+          disabled={disabled}
           min={STROKE_MIN}
           max={STROKE_MAX}
           step={1}
@@ -100,6 +109,7 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
           <button
             type="button"
             aria-label="Decrease stroke width"
+            disabled={disabled}
             onClick={decreaseStroke}
             className="grid h-5 w-5 place-items-center rounded-md text-slate-500 transition hover:bg-slate-100"
           >
@@ -109,6 +119,7 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
           <button
             type="button"
             aria-label="Increase stroke width"
+            disabled={disabled}
             onClick={increaseStroke}
             className="grid h-5 w-5 place-items-center rounded-md text-slate-500 transition hover:bg-slate-100"
           >
@@ -121,9 +132,13 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
             <button
               key={preset}
               type="button"
+              disabled={disabled}
               onClick={() => setStroke(preset)}
               title={`${preset}px`}
               className={`grid h-5 w-5 place-items-center rounded-full transition ${
+                disabled
+                  ? "cursor-not-allowed bg-slate-100 text-slate-300"
+                  :
                 strokeWidth === preset ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300"
               }`}
             >
@@ -136,7 +151,9 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
   }
 
   return (
-    <div className="pointer-events-auto mx-2 mt-2 rounded-2xl border border-slate-200/90 bg-white/95 p-2 shadow-sm backdrop-blur-sm md:mx-4 md:mt-3">
+    <div className={`pointer-events-auto mx-2 mt-2 rounded-2xl border border-slate-200/90 bg-white/95 p-2 shadow-sm backdrop-blur-sm md:mx-4 md:mt-3 ${
+      disabled ? "opacity-70" : ""
+    }`}>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1 md:pb-0">
           {tools.map((t) => {
@@ -146,8 +163,12 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
               <button
                 key={t.tool}
                 type="button"
+                disabled={disabled}
                 onClick={() => setTool(t.tool)}
                 className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium capitalize transition md:px-3 md:text-sm ${
+                  disabled
+                    ? "cursor-not-allowed bg-slate-100 text-slate-400"
+                    :
                   selected === t.tool
                     ? "bg-slate-900 text-white shadow-sm"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -164,6 +185,7 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
           <button
             type="button"
             aria-label="Decrease stroke width"
+            disabled={disabled}
             onClick={decreaseStroke}
             className="grid h-7 w-7 place-items-center rounded-md text-slate-600 transition hover:bg-slate-200"
           >
@@ -172,6 +194,7 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
           <input
             aria-label="Stroke color"
             type="color"
+            disabled={disabled}
             value={color}
             onChange={(event) => setColor(event.target.value)}
             className="h-7 w-7 cursor-pointer rounded border-0 bg-transparent p-0"
@@ -179,6 +202,7 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
           <input
             aria-label="Stroke width"
             type="range"
+            disabled={disabled}
             min={STROKE_MIN}
             max={STROKE_MAX}
             step={1}
@@ -189,6 +213,7 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
           <input
             aria-label="Stroke width in pixels"
             type="number"
+            disabled={disabled}
             min={STROKE_MIN}
             max={STROKE_MAX}
             value={strokeWidth}
@@ -198,6 +223,7 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
           <button
             type="button"
             aria-label="Increase stroke width"
+            disabled={disabled}
             onClick={increaseStroke}
             className="grid h-7 w-7 place-items-center rounded-md text-slate-600 transition hover:bg-slate-200"
           >
@@ -210,8 +236,12 @@ export default function Header({ layout = "horizontal" }: HeaderProps) {
             <button
               key={preset}
               type="button"
+              disabled={disabled}
               onClick={() => setStroke(preset)}
               className={`grid h-6 w-6 place-items-center rounded-md transition ${
+                disabled
+                  ? "cursor-not-allowed text-slate-300"
+                  :
                 strokeWidth === preset ? "bg-indigo-100 text-indigo-700" : "text-slate-500 hover:bg-slate-100"
               }`}
               title={`${preset}px`}

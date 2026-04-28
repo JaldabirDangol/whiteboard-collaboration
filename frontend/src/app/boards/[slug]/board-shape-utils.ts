@@ -119,6 +119,7 @@ export const normalizeShapesForClient = (rawShapes: unknown[]): BoardShape[] => 
 
 export const toUint8 = (value: unknown): Uint8Array => {
   if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
   if (Array.isArray(value)) return new Uint8Array(value);
   if (value && typeof value === "object") {
     const arrLike = value as { data?: number[] };

@@ -208,12 +208,15 @@ export async function getShapes(boardId: string) {
   });
 }
 
-const toShapeType = (value: unknown): "RECTANGLE" | "CIRCLE" | "LINE" | "DRAW" => {
+const toShapeType = (value: unknown): "RECTANGLE" | "CIRCLE" | "LINE" | "ARROW" | "TEXT" | "DRAW" | "IMAGE" => {
   const normalized = typeof value === "string" ? value.toLowerCase() : "";
 
   if (normalized === "rectangle") return "RECTANGLE";
   if (normalized === "circle") return "CIRCLE";
   if (normalized === "line") return "LINE";
+  if (normalized === "arrow") return "ARROW";
+  if (normalized === "text") return "TEXT";
+  if (normalized === "image") return "IMAGE";
   return "DRAW";
 };
 
@@ -276,5 +279,67 @@ export async function saveBoardSnapshot(boardId: string, data: unknown) {
       version: nextVersion,
       data: data as any,
     },
+  });
+}
+
+// ── Board Object CRUD ──
+
+export async function createBoardObject(
+  boardId: string,
+  userId: string,
+  payload: { type: string; data: Record<string, unknown> }
+) {
+  return await prisma.shape.create({
+    data: {
+      boardId,
+      userId,
+      type: toShapeType(payload.type),
+      data: payload.data as any,
+    },
+  });
+}
+
+export async function getBoardObject(objectId: string) {
+  return await prisma.shape.findUnique({
+    where: { id: objectId },
+  });
+}
+
+export async function updateBoardObject(
+  objectId: string,
+  payload: { type?: string; data?: Record<string, unknown> }
+) {
+  const updateData: Record<string, unknown> = {};
+  if (payload.type !== undefined) updateData.type = toShapeType(payload.type);
+  if (payload.data !== undefined) updateData.data = payload.data as any;
+
+  return await prisma.shape.update({
+    where: { id: objectId },
+    data: updateData,
+  });
+}
+
+export async function deleteBoardObject(objectId: string) {
+  return await prisma.shape.delete({
+    where: { id: objectId },
+  });
+}
+
+export async function getBoardSnapshots(boardId: string, limit = 20) {
+  return await prisma.snapshot.findMany({
+    where: { boardId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      version: true,
+      createdAt: true,
+    },
+  });
+}
+
+export async function getBoardSnapshotById(snapshotId: string) {
+  return await prisma.snapshot.findUnique({
+    where: { id: snapshotId },
   });
 }

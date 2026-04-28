@@ -46,7 +46,7 @@ model BoardMember {
   role    Role
 
   user  User  @relation(fields: [userId], references: [id])
-  board Board @relation(fields: [boardId], references: [id])
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   @@unique([userId, boardId])
 }
@@ -55,7 +55,7 @@ model Shape {
   id String @id @default(uuid())
 
   boardId String
-  board   Board  @relation(fields: [boardId], references: [id])
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
@@ -73,7 +73,7 @@ model Snapshot {
   id String @id @default(uuid())
 
   boardId String
-  board   Board  @relation(fields: [boardId], references: [id])
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   version Int
   data    Json
@@ -86,7 +86,7 @@ model Message {
   id String @id @default(uuid())
 
   boardId String
-  board   Board  @relation(fields: [boardId], references: [id])
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
@@ -101,7 +101,7 @@ model Comment {
   id String @id @default(uuid())
 
   shapeId String
-  shape   Shape  @relation(fields: [shapeId], references: [id])
+  shape   Shape  @relation(fields: [shapeId], references: [id], onDelete: Cascade)
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
@@ -116,7 +116,7 @@ model Asset {
   id String @id @default(uuid())
 
   boardId String
-  board   Board  @relation(fields: [boardId], references: [id])
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   url  String
   type AssetType
@@ -131,7 +131,7 @@ model AuditLog {
   id String @id @default(uuid())
 
   boardId String
-  board   Board  @relation(fields: [boardId], references: [id])
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   userId String
 
@@ -146,7 +146,7 @@ model BoardSettings {
   id String @id @default(uuid())
 
   boardId String @unique
-  board   Board  @relation(fields: [boardId], references: [id])
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   isPublic Boolean @default(false)
   password String?

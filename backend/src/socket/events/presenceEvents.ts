@@ -39,6 +39,11 @@ export const registerPresenceEvents = (io: Server, socket: Socket) => {
   let activeBoardId: string | null = null
 
   socket.on("presence:join", async ({ boardId }: { boardId: string }) => {
+    // Guard: skip if already tracking presence for this board on this socket
+    if (activeBoardId === boardId) {
+      return
+    }
+
     const canJoin = await canAccessBoard(socket, boardId)
     if (!canJoin) {
       socket.emit("presence:error", {

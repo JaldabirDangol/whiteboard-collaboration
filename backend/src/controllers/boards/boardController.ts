@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as boardService from "./boardServices.js";
 import { prisma } from "@/lib/prisma.js";
+import { logAction } from "@/lib/auditLog.js";
 
 export async function createBoard(req: Request, res: Response) {
   try {
@@ -18,6 +19,7 @@ export async function createBoard(req: Request, res: Response) {
       return res.status(400).json({ error: "Board with this title already exists" });
     }
      board = await boardService.createBoard({...req.body , userId});
+    await logAction({ boardId: board.id, userId, action: "board.created", metadata: { title: board.title } });
     return res.status(201).json(board);
   } catch (error) {
     console.error(error)
@@ -135,6 +137,8 @@ export async function shareBoard(req: Request, res: Response) {
       nextRole
     );
 
+    await logAction({ boardId, userId: ownerUserId, action: "board.shared", metadata: { email: email.trim().toLowerCase(), role: nextRole } });
+
     return res.json({
       message: "Board shared successfully",
       member: result.member,
@@ -160,6 +164,7 @@ export async function joinBoard(req: Request, res: Response) {
     }
 
     const result = await boardService.joinBoard(boardId, userId);
+    await logAction({ boardId, userId, action: "board.joined" });
     return res.json({
       message: "Joined board successfully",
       board: result.board,
@@ -184,6 +189,7 @@ export async function deleteBoard(req: Request, res: Response) {
     }
 
     const board = await boardService.deleteBoard(id as string);
+    await logAction({ boardId: id as string, userId: actorUserId, action: "board.deleted", metadata: { title: board.title } });
     return res.json({
       message: "Board deleted successfully",
       boardTitle: board.title,

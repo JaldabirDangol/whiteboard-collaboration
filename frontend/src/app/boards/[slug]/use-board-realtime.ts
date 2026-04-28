@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { io, type Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
+import { acquireSocket, releaseSocket } from "@/lib/board-socket";
 import type { BoardShape, RemoteCursor } from "./board-types";
 import {
   LOCAL_ORIGIN,
@@ -13,18 +14,6 @@ import {
 
 const CURSOR_STALE_MS = 12000;
 
-const getSocketUrl = () => {
-  if (process.env.NEXT_PUBLIC_SOCKET_URL) {
-    return process.env.NEXT_PUBLIC_SOCKET_URL;
-  }
-
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, "");
-  }
-
-  return "http://localhost:3050";
-};
-
 type UseBoardRealtimeArgs = {
   boardId: string;
   userId?: string;
@@ -36,6 +25,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
   const docRef = useRef<Y.Doc | null>(null);
   const yBoardRef = useRef<Y.Map<string> | null>(null);
   const lastCursorEmitAt = useRef(0);
+  const userIdRef = useRef(userId);
 
   const [shapes, setShapes] = useState<BoardShape[]>([]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
@@ -106,16 +96,18 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     });
   }, [persistedShapes]);
 
+  // Keep userIdRef in sync without re-creating the socket
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
+
   useEffect(() => {
     const doc = new Y.Doc();
     const yBoard = doc.getMap<string>("board");
     docRef.current = doc;
     yBoardRef.current = yBoard;
 
-    const socket = io(getSocketUrl(), {
-      withCredentials: true,
-      transports: ["websocket"],
-    });
+    const socket = acquireSocket();
     socketRef.current = socket;
 
     const applySnapshot = () => {
@@ -151,7 +143,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
     const onCursorMove = ({ userId: incomingUserId, position }: { userId?: string; position?: { x: number; y: number } }) => {
       if (!incomingUserId || !position) return;
-      if (userId && incomingUserId === userId) return;
+      if (userIdRef.current && incomingUserId === userIdRef.current) return;
 
       setRemoteCursors((prev) => ({
         ...prev,
@@ -200,14 +192,14 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       socket.off("board:userLeft", onUserLeft);
       socket.off("presence:userOffline", onUserLeft);
       doc.off("update", onDocUpdate);
-      socket.disconnect();
+      releaseSocket();
       doc.destroy();
 
       socketRef.current = null;
       docRef.current = null;
       yBoardRef.current = null;
     };
-  }, [boardId, userId]);
+  }, [boardId]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {

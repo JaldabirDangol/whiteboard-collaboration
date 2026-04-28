@@ -124,6 +124,15 @@ export default function Page() {
     },
   });
 
+  // Auto-join the board once when the page loads
+  const hasJoinedRef = useRef(false);
+  useEffect(() => {
+    if (!user?.id || !id || hasJoinedRef.current) return;
+    hasJoinedRef.current = true;
+    joinBoardMutation.mutate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, user?.id]);
+
   const shareBoardMutation = useMutation({
     mutationFn: ({ email, role }: { email: string; role: "EDITOR" | "VIEWER" }) =>
       shareBoard(id, email, role),
@@ -365,11 +374,6 @@ export default function Page() {
       observer.disconnect();
     };
   }, []);
-
-  useEffect(() => {
-    if (!user?.id || !id) return;
-    joinBoardMutation.mutate();
-  }, [id, joinBoardMutation, user?.id]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#f8fafc]">

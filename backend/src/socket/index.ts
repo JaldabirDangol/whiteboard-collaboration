@@ -3,6 +3,7 @@ import { Server as HttpServer } from "http"
 
 import { registerBoardEvents } from "@/socket/events/boardEvent.js"
 import { registerPresenceEvents } from "@/socket/events/presenceEvents.js"
+import { registerChatEvents } from "@/socket/events/chatEvents.js"
 import { socketAuth } from "@/socket/middleware/socketAuth.js"
 
 
@@ -11,7 +12,8 @@ let io: Server;
 export const initSocket = (server: HttpServer) => {
   io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || "http://localhost:5173"
+      origin: process.env.FRONTEND_URL || "http://localhost:5173",
+      credentials: true,
     }
   })
 
@@ -22,6 +24,7 @@ export const initSocket = (server: HttpServer) => {
 
     registerBoardEvents(io, socket)
     registerPresenceEvents(io, socket)
+    registerChatEvents(io, socket)
   })
 
   return io

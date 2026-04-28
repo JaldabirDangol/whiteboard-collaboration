@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { io, Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 import { X } from "lucide-react";
 import {
 	BoardMessage,
@@ -10,6 +10,7 @@ import {
 	sendBoardMessage,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { acquireSocket, releaseSocket } from "@/lib/board-socket";
 
 type ChatProps = {
 	boardId: string;
@@ -18,18 +19,6 @@ type ChatProps = {
 	onClose?: () => void;
 	showMobileClose?: boolean;
 	showHeader?: boolean;
-};
-
-const getSocketUrl = () => {
-	if (process.env.NEXT_PUBLIC_SOCKET_URL) {
-		return process.env.NEXT_PUBLIC_SOCKET_URL;
-	}
-
-	if (process.env.NEXT_PUBLIC_API_URL) {
-		return process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, "");
-	}
-
-	return "http://localhost:3050";
 };
 
 const formatTimestamp = (dateLike: string) => {
@@ -98,14 +87,15 @@ export default function Chat({
 	}, [sortedMessages, scrollToBottom]);
 
 	useEffect(() => {
-		const socket = io(getSocketUrl(), {
-			withCredentials: true,
-			transports: ["websocket"],
-		});
-
+		const socket = acquireSocket();
 		socketRef.current = socket;
-		socket.emit("board:join", boardId);
-		socket.emit("presence:join", { boardId });
+
+		// Do NOT emit board:join or presence:join here.
+		// The main useBoardRealtime hook already handles that.
+		// Chat only needs to join the socket.io room to receive messages.
+		// The board:join from the main hook puts this socket's underlying
+		// connection into the room. Since we reuse a shared socket,
+		// we just listen for broadcast events.
 
 		const onMessageSent = (message: BoardMessage) => {
 			setMessages((prev) => {
@@ -140,14 +130,13 @@ export default function Chat({
 		socket.on("presence:state", onPresenceState);
 
 		return () => {
-			socket.emit("presence:leave", { boardId });
-			socket.emit("board:leave", boardId);
 			socket.off("messageSent", onMessageSent);
 			socket.off("messageDeleted", onMessageDeleted);
 			socket.off("presence:userOnline", onUserOnline);
 			socket.off("presence:userOffline", onUserOffline);
 			socket.off("presence:state", onPresenceState);
-			socket.disconnect();
+			socketRef.current = null;
+			releaseSocket();
 		};
 	}, [boardId]);
 

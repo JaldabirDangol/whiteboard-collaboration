@@ -37,6 +37,7 @@ export default function Page() {
   const stageRef = useRef<KonvaStage | null>(null);
 
   const [stageSize, setStageSize] = useState({ width: 1, height: 1 });
+  const [mounted, setMounted] = useState(false);
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -338,6 +339,10 @@ export default function Page() {
   }, [loading, user, router]);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (canEditBoard && useToolStore.getState().selected === "select") {
       setTool("pen");
     }
@@ -430,12 +435,12 @@ export default function Page() {
 
       <div className="relative flex min-h-0 flex-1">
         <aside className="hidden w-20 border-r border-slate-200 bg-white md:flex md:items-start md:justify-center">
-          <Header layout="vertical" disabled={!canEditBoard} />
+          <Header layout="vertical" disabled={mounted && !canEditBoard} />
         </aside>
 
         <main ref={boardWrapRef} className="relative min-w-0 flex-1 bg-[radial-gradient(circle_at_1px_1px,#dbe4ef_1px,transparent_1.3px)] bg-size-[20px_20px]">
           <div className="absolute left-2 top-2 z-20 md:hidden">
-            <Header disabled={!canEditBoard} />
+            <Header disabled={mounted && !canEditBoard} />
           </div>
 
           <Stage

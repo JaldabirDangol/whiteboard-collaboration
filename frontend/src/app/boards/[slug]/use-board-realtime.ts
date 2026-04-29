@@ -171,7 +171,23 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       setForbiddenMessage(message || "You only have viewer access on this board");
     };
 
+    const joinRoom = () => {
+      socket.emit("board:join", boardId);
+      socket.emit("presence:join", { boardId });
+    };
+
+    const onConnect = () => {
+      // Re-join on initial connect AND any reconnect
+      joinRoom();
+    };
+
+    const onConnectError = (err: Error) => {
+      console.error("[board:socket] connection error", err.message);
+    };
+
     doc.on("update", onDocUpdate);
+    socket.on("connect", onConnect);
+    socket.on("connect_error", onConnectError);
     socket.on("board:init", onInit);
     socket.on("yjs:update", onUpdate);
     socket.on("board:state", onState);
@@ -180,10 +196,15 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     socket.on("board:userLeft", onUserLeft);
     socket.on("presence:userOffline", onUserLeft);
 
-    socket.emit("board:join", boardId);
+    // If already connected (shared socket), join immediately
+    if (socket.connected) {
+      joinRoom();
+    }
 
     return () => {
       socket.emit("board:leave", boardId);
+      socket.off("connect", onConnect);
+      socket.off("connect_error", onConnectError);
       socket.off("board:init", onInit);
       socket.off("yjs:update", onUpdate);
       socket.off("board:state", onState);

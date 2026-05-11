@@ -78,11 +78,15 @@ const hydrateDocFromPersistence = async (boardId: string, doc: Y.Doc) => {
 const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string) => {
   try {
     const shapes = parseShapesFromYDoc(doc);
+    console.log(`[board:persist] Saving ${shapes.length} shapes for board ${boardId}, userId: ${userId}`);
+
+    // Always save snapshot
     await saveBoardSnapshot(boardId, { shapes });
 
-    if (userId) {
-      await replaceBoardShapes(boardId, userId, shapes as Record<string, unknown>[]);
-    }
+    // Save shapes to DB - use system as fallback userId if not provided
+    const finalUserId = userId || "system";
+    const savedCount = await replaceBoardShapes(boardId, finalUserId, shapes as Record<string, unknown>[]);
+    console.log(`[board:persist] Saved ${savedCount} shapes to DB for board ${boardId}`);
   } catch (error) {
     console.error("[board:persist] immediate persist failed", { boardId, error });
   }
@@ -91,6 +95,8 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
 const debouncedPersist = (boardId: string, doc: Y.Doc, userId?: string) => {
   const existing = persistTimers.get(boardId);
   if (existing) clearTimeout(existing);
+
+  console.log(`[debouncedPersist] Set timer for board ${boardId}, will save in ${PERSIST_DEBOUNCE_MS}ms`);
 
   persistTimers.set(
     boardId,
@@ -157,7 +163,11 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
 
   // 2. Continuous Sync: The "Holy Grail" event
   socket.on("yjs:update", async ({ boardId, update }: { boardId: string, update: unknown }) => {
+    console.log("[yjs:update] Received from client, boardId:", boardId, "update length:", Array.isArray(update) ? update.length : "N/A");
+
     const canEdit = await canEditBoard(socket, boardId);
+    console.log("[yjs:update] canEdit:", canEdit, "userId:", socket.data.user?.id);
+
     if (!canEdit) {
       socket.emit("board:forbidden", {
         boardId,
@@ -169,15 +179,20 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
     const doc = getYDoc(boardId);
     const normalizedUpdate = toUint8(update);
     if (normalizedUpdate.length === 0) {
+      console.log("[yjs:update] Empty update, skipping");
       return;
     }
 
     // Apply the change to the server's version of the doc
     Y.applyUpdate(doc, normalizedUpdate, CLIENT_UPDATE_ORIGIN);
+    console.log("[yjs:update] Applied update to Y.Doc");
 
     // Broadcast that specific change to everyone else in the room
     socket.to(boardId).emit("yjs:update", Array.from(normalizedUpdate));
+
+    // Trigger debounced persist
     debouncedPersist(boardId, doc, socket.data.user?.id);
+    console.log("[yjs:update] Triggered debounced persist");
   });
 
   // ── Explicit object-level events ──

@@ -76,22 +76,40 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     return true;
   }, [boardId, serverReadOnly]);
 
+  // Load shapes from REST API - run when persistedShapes changes
+  // This ensures we have shapes even if Yjs socket hasn't synced properly
   useEffect(() => {
-    if (!persistedShapes || persistedShapes.length === 0) return;
+    console.log("[persistShapes] Loading shapes from REST, count:", persistedShapes?.length || 0);
 
+    if (!persistedShapes || persistedShapes.length === 0) {
+      console.log("[persistShapes] No shapes from REST");
+      return;
+    }
+
+    const doc = docRef.current;
+    const yBoard = yBoardRef.current;
+    const next = normalizeShapesForClient(persistedShapes as unknown[]);
+    console.log("[persistShapes] Normalized shapes:", next.length);
+
+    if (doc && yBoard) {
+      // Check what's currently in Yjs
+      const existingShapes = yBoard.get(SHAPES_KEY);
+      console.log("[persistShapes] Current Yjs shapes:", existingShapes ? "has data" : "empty");
+
+      // Always sync REST data to Yjs if we have shapes
+      doc.transact(() => {
+        yBoard.set(SHAPES_KEY, JSON.stringify(next));
+      }, REMOTE_ORIGIN);
+    }
+
+    // Update React state
     setShapes((prev) => {
-      if (prev.length > 0) return prev;
-
-      const next = normalizeShapesForClient(persistedShapes as unknown[]);
-      const doc = docRef.current;
-      const yBoard = yBoardRef.current;
-
-      if (doc && yBoard) {
-        doc.transact(() => {
-          yBoard.set(SHAPES_KEY, JSON.stringify(next));
-        }, REMOTE_ORIGIN);
+      // If we already have shapes and they're the same count, don't overwrite
+      if (prev.length > 0 && prev.length === next.length) {
+        console.log("[persistShapes] Already has shapes, skipping");
+        return prev;
       }
-
+      console.log("[persistShapes] Setting shapes:", next.length);
       return next;
     });
   }, [persistedShapes]);
@@ -117,6 +135,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
     const onDocUpdate = (update: Uint8Array, origin: unknown) => {
       if (origin !== LOCAL_ORIGIN) return;
+      console.log("[yjs:update] Emitting update to server, boardId:", boardId, "update length:", update.length);
       socket.emit("yjs:update", { boardId, update: Array.from(update) });
     };
 
@@ -177,6 +196,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     };
 
     const onConnect = () => {
+      console.log("[board:socket] Connected, socketId:", socket.id);
       // Re-join on initial connect AND any reconnect
       joinRoom();
     };

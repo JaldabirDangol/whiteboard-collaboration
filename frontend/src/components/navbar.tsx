@@ -14,13 +14,19 @@ import { toast } from "sonner";
 import { logout } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/store/useUserStore";
+import { LogOut, Plus, Search } from "lucide-react";
 
 
 const Navbar = () => {
   const [title, setTitle] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
+  const user = useUserStore((state) => state.user);
+  const userInitials = user?.email
+    ? user.email.split("@")[0].slice(0, 2).toUpperCase()
+    : "U";
   const clearUser = useUserStore((state) => state.clearUser);
 
   const queryClient = useQueryClient();
@@ -47,12 +53,13 @@ const Navbar = () => {
     return json;
   },
 
-  onSuccess: () => {
+  onSuccess: (data) => {
     queryClient.invalidateQueries({ queryKey: ["boards"] });
     setOpen(false);
     setTitle("");
     setThumbnailUrl("");
     toast.success("Board created successfully!");
+    router.push(`/boards/${data.id}`);
   },
   onError:(err)=>{
     toast.error(err.message)
@@ -82,55 +89,87 @@ const Navbar = () => {
   };
 
   return (
-    <div className="flex justify-between items-center gap-3">
-      <input
-        type="text"
-        placeholder="Search..."
-        className="border rounded px-4 py-2 w-64"
-      />
+    <div className="flex justify-between items-center gap-4 mb-6">
+      <div className="relative flex-1 max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Search boards..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm"
+        />
+      </div>
 
-      <button
-        type="button"
-        onClick={() => logoutMutation.mutate()}
-        disabled={logoutMutation.isPending}
-        className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
-      >
-        {logoutMutation.isPending ? "Logging out..." : "Logout"}
-      </button>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
+          <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-medium">
+            {userInitials}
+          </div>
+          <span className="text-sm font-medium text-slate-700 hidden sm:block">
+            {user?.email?.split("@")[0]}
+          </span>
+        </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger className="py-2 px-4 rounded-sm shadow-sm bg-blue-900 text-white">
-          Create Board
-        </DialogTrigger>
+        <button
+          type="button"
+          onClick={() => logoutMutation.mutate()}
+          disabled={logoutMutation.isPending}
+          className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 disabled:opacity-60"
+        >
+          <LogOut className="h-4 w-4" />
+          <span className="hidden sm:inline">Logout</span>
+        </button>
 
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Board</DialogTitle>
-          </DialogHeader>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger className="flex items-center gap-2 py-2.5 px-4 rounded-xl shadow-sm bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 transition-colors">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">New Board</span>
+          </DialogTrigger>
 
-          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Board title"
-              className="w-full border p-2 rounded"
-            />
-               <input
-              value={thumbnailUrl}
-              onChange={(e) => setThumbnailUrl(e.target.value)}
-              placeholder="Thumbnail URL"
-              className="w-full border p-2 rounded"
-            />
-            <button
-              type="submit"
-              disabled={createBoard.isPending}
-              className="w-full bg-black text-white py-2 rounded"
-            >
-              {createBoard.isPending ? "Creating..." : "Create"}
-            </button>
-          </form>
-        </DialogContent>
-      </Dialog>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-semibold">Create New Board</DialogTitle>
+            </DialogHeader>
+
+            <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+              <div className="space-y-2">
+                <label htmlFor="title" className="text-sm font-medium text-slate-700">
+                  Board Name
+                </label>
+                <input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="My Awesome Board"
+                  className="w-full border border-slate-200 p-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="thumbnail" className="text-sm font-medium text-slate-700">
+                  Thumbnail URL (optional)
+                </label>
+                <input
+                  id="thumbnail"
+                  value={thumbnailUrl}
+                  onChange={(e) => setThumbnailUrl(e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                  className="w-full border border-slate-200 p-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={createBoard.isPending}
+                className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium text-sm hover:bg-indigo-700 transition-colors disabled:opacity-60"
+              >
+                {createBoard.isPending ? "Creating..." : "Create Board"}
+              </button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 };

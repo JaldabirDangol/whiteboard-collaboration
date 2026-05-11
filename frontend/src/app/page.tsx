@@ -4,101 +4,146 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useUserStore } from "@/store/useUserStore";
 import { motion } from "motion/react";
 import Link from "next/link";
-import {useRouter} from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { Sparkles, Undo, Infinity, ArrowRight } from "lucide-react";
 
 export default function LandingPage() {
   const router = useRouter();
   const user = useUserStore((state) => state.user);
-  console.log("User in landing page:", user);
-   useEffect(() => {
+
+  useEffect(() => {
     if (user) {
-     console.log("User in landing page:", user);
       router.push("/boards");
     }
   }, [user, router]);
+
+  const features = [
+    {
+      icon: Sparkles,
+      title: "Real-time Sync",
+      desc: "Instant updates using CRDTs so everyone stays in sync.",
+    },
+    {
+      icon: Undo,
+      title: "Undo / Redo",
+      desc: "Powerful history management with collaborative undo.",
+    },
+    {
+      icon: Infinity,
+      title: "Infinite Canvas",
+      desc: "No limits. Create freely on an endless whiteboard.",
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-linear-to-br from-gray-900 to-black text-white">
+    <div className="min-h-screen bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       {/* Header */}
-      <header className="flex items-center justify-between px-8 py-4 border-b border-gray-800">
-        <h1 className="text-2xl font-bold">WhiteboardX</h1>
-        <div className="space-x-4">
-          <Link href="/login" className="text-white ">
+      <header className="flex items-center justify-between px-8 py-5 border-b border-slate-800/50">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-xl bg-indigo-500 flex items-center justify-center">
+            <span className="text-white font-bold">W</span>
+          </div>
+          <h1 className="text-xl font-bold">WhiteboardX</h1>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link href="/login" className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition">
             Login
           </Link>
-          <Link href="/signup" className="text-white ">
-            Sign Up
+          <Link href="/signup">
+            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700">
+              Sign Up
+            </Button>
           </Link>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="flex flex-col items-center justify-center text-center px-6 py-24">
-        <motion.h2
+      <section className="flex flex-col items-center justify-center text-center px-6 py-32">
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-5xl font-extrabold mb-6"
+          className="max-w-3xl"
         >
-          Collaborate on a Whiteboard in Real-Time
-        </motion.h2>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-medium mb-6">
+            <Sparkles className="h-3.5 w-3.5" />
+            Real-time collaborative whiteboard
+          </div>
 
-        <p className="text-gray-400 max-w-xl mb-8">
-          Draw, brainstorm, and build ideas together instantly with your team.
-          Powered by real-time sync and smooth interactions.
-        </p>
+          <h2 className="text-5xl md:text-6xl font-extrabold mb-6 bg-linear-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+            Collaborate on a Whiteboard in Real-Time
+          </h2>
 
-        <div className="space-x-4">
-          <Link href="/signup" className="text-white ">
-            <Button size="lg">Get Started</Button>
-          </Link>
-          <Link href="/demo" className="text-white ">
-            <Button variant="outline" className="text-gray-900"  size="lg">
-              Live Demo
-            </Button>
-          </Link>
-        </div>
+          <p className="text-slate-400 text-lg max-w-xl mx-auto mb-10">
+            Draw, brainstorm, and build ideas together instantly with your team.
+            Powered by real-time sync and smooth interactions.
+          </p>
+
+          <div className="flex items-center justify-center gap-4">
+            <Link href="/signup">
+              <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700 px-6">
+                Get Started
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button variant="outline" size="lg" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white">
+                Try Demo
+              </Button>
+            </Link>
+          </div>
+        </motion.div>
       </section>
 
       {/* Features */}
-      <section className="px-8 py-16 grid md:grid-cols-3 gap-6">
-        {[
-          {
-            title: "Real-time Sync",
-            desc: "Instant updates using CRDTs so everyone stays in sync.",
-          },
-          {
-            title: "Undo / Redo",
-            desc: "Powerful history management with collaborative undo.",
-          },
-          {
-            title: "Infinite Canvas",
-            desc: "No limits. Create freely on an endless whiteboard.",
-          },
-        ].map((feature, i) => (
-          <Card key={i} className="bg-gray-900 border-gray-800">
-            <CardContent className="p-6">
-              <h3 className="text-xl font-semibold mb-2 text-gray-200">{feature.title}</h3>
-              <p className="text-gray-400">{feature.desc}</p>
-            </CardContent>
-          </Card>
-        ))}
+      <section className="px-8 py-20 max-w-5xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-6">
+          {features.map((feature, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.2 + i * 0.1 }}
+            >
+              <Card className="bg-slate-900/50 border-slate-800 hover:border-indigo-500/30 transition-colors">
+                <CardContent className="p-6">
+                  <div className="h-11 w-11 rounded-xl bg-indigo-500/10 flex items-center justify-center mb-4">
+                    <feature.icon className="h-5 w-5 text-indigo-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2 text-slate-200">{feature.title}</h3>
+                  <p className="text-slate-400 text-sm">{feature.desc}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
       </section>
 
       {/* CTA */}
       <section className="text-center py-20 px-6">
-        <h3 className="text-3xl font-bold mb-4">
-          Start Collaborating Now
-        </h3>
-        <p className="text-gray-400 mb-6">
-          Invite your team and build ideas together in seconds.
-        </p>
-        <Button size="lg">Create Board</Button>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+        >
+          <h3 className="text-3xl font-bold mb-4">
+            Start Collaborating Now
+          </h3>
+          <p className="text-slate-400 mb-8 max-w-md mx-auto">
+            Invite your team and build ideas together in seconds.
+          </p>
+          <Link href="/signup">
+            <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700 px-8">
+              Create Free Account
+            </Button>
+          </Link>
+        </motion.div>
       </section>
 
       {/* Footer */}
-      <footer className="text-center text-gray-500 py-6 border-t border-gray-800">
-        © {new Date().getFullYear()} WhiteboardX. All rights reserved.
+      <footer className="text-center text-slate-500 py-6 border-t border-slate-800/50 text-sm">
+        &copy; {new Date().getFullYear()} WhiteboardX. All rights reserved.
       </footer>
     </div>
   );

@@ -170,7 +170,7 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
                     ? "cursor-not-allowed bg-slate-100 text-slate-400"
                     :
                   selected === t.tool
-                    ? "bg-slate-900 text-white shadow-sm"
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                 }`}
               >

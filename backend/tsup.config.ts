@@ -10,5 +10,5 @@ export default defineConfig({
   clean: true,
   dts: true,
   splitting: false,
-  external: ["@prisma/client-runtime-utils", "@prisma/client", "prisma"],
+  external: ["@prisma/client", "prisma"],
 });

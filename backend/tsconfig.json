@@ -7,7 +7,8 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-
+  
+    "noImplicitAny": false,
     /* Environment Settings */
     "module": "nodenext",
     "moduleResolution": "nodenext",

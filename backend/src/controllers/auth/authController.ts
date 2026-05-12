@@ -31,6 +31,7 @@ export async function Signup(req: Request, res: Response) {
 export async function Login(req: Request, res: Response) {
     try {
         const { email, password } = req.body;
+        const isProd = process.env.NODE_ENV === "production";
 
         const normalizedEmail = email.trim().toLowerCase();
         if (!normalizedEmail || !password) return res.status(400).json({ error: "Email and password are required" });
@@ -44,11 +45,11 @@ export async function Login(req: Request, res: Response) {
      const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET!, { expiresIn: "1h" })
 
 
-   res.cookie("token", token, {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax",
-  maxAge: 3600 * 1000 // 1 hour
+     res.cookie("token", token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    maxAge: 3600 * 1000 // 1 hour
 })
 return res.status(200).json({ id: user.id, email: user.email, message: "Login successful" }) 
     } catch (error) {
@@ -59,10 +60,11 @@ return res.status(200).json({ id: user.id, email: user.email, message: "Login su
 
 export async function Logout(req: Request, res: Response) {
   try {
+                const isProd = process.env.NODE_ENV === "production";
         res.clearCookie("token", {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
+                        secure: isProd,
+                        sameSite: isProd ? "none" : "lax",
         }) 
     return res.status(200).json({ message: "Logged out" })
   } catch (error) {

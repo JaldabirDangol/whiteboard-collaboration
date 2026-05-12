@@ -1,1 +1,1 @@
-export const apiUrl = process.env.API_URL ?? "http://localhost:3050/api";
+export const apiUrl = process.env.API_URL ?? "https://whiteboard-collaboration-production.up.railway.app/api";

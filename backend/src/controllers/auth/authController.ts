@@ -43,7 +43,6 @@ export async function Login(req: Request, res: Response) {
 
      const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET!, { expiresIn: "1h" })
 
-     console.log("Generated JWT token:", token); // Debug log to check the generated token
 
    res.cookie("token", token, {
   httpOnly: true,

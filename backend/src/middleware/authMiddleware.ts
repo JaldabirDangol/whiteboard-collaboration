@@ -13,7 +13,6 @@ export const authMiddleware = (
 ) => {
   const token = req.cookies.token;
 
-  console.log("Auth Middleware - Token from cookies:", token); // Debug log
   if (!token) {
     return res.status(401).json({ message: "Unauthorized" })
   }

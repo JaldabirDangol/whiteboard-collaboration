@@ -32,7 +32,11 @@ const requireEnv = () => {
 
 const app = express();
 app.set("trust proxy", 1);
-app.use(helmet());
+app.use(
+  helmet({
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  })
+);
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,

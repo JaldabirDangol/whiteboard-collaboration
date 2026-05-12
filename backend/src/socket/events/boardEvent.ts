@@ -3,18 +3,22 @@ import * as Y from "yjs";
 import { getYDoc } from "@/socket/yjs.js" // Path to the file above
 import {
   getBoardShapesFromDatabase,
+  getBoardCurrentSnapshotVersion,
+  getBoardSnapshotByVersion,
   getLatestBoardSnapshot,
+  getSnapshotAfterVersion,
+  getSnapshotBeforeVersion,
   replaceBoardShapes,
   saveBoardSnapshot,
+  setBoardCurrentSnapshotVersion,
 } from "@/controllers/boards/boardServices.js";
 import { canAccessBoard, canEditBoard } from "@/socket/boardAccess.js";
 
-const undoManagers = new Map<string, Y.UndoManager>();
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const SHAPES_KEY = "shapes";
 const CLIENT_UPDATE_ORIGIN = "client-update";
-const PERSIST_DEBOUNCE_MS = 2000;
+const PERSIST_DEBOUNCE_MS = 500;
 
 const toUint8 = (value: unknown): Uint8Array => {
   if (value instanceof Uint8Array) return value;
@@ -45,6 +49,19 @@ const parseShapesFromYDoc = (doc: Y.Doc) => {
   }
 };
 
+const applyShapesToDoc = (doc: Y.Doc, shapes: unknown[]) => {
+  doc.getMap<string>("board").set(SHAPES_KEY, JSON.stringify(shapes));
+};
+
+const extractShapesFromSnapshot = (snapshot: { data?: unknown } | null) => {
+  if (!snapshot || typeof snapshot.data !== "object" || snapshot.data === null) {
+    return [];
+  }
+
+  const payload = snapshot.data as { shapes?: unknown };
+  return Array.isArray(payload.shapes) ? payload.shapes : [];
+};
+
 const hydrateDocFromPersistence = async (boardId: string, doc: Y.Doc) => {
   const boardMap = doc.getMap<string>("board");
   const inMemoryShapes = parseShapesFromYDoc(doc);
@@ -60,13 +77,12 @@ const hydrateDocFromPersistence = async (boardId: string, doc: Y.Doc) => {
     return;
   }
 
-  const latestSnapshot = await getLatestBoardSnapshot(boardId);
-  if (!latestSnapshot || typeof latestSnapshot.data !== "object" || latestSnapshot.data === null) {
-    return;
-  }
+  const currentVersion = await getBoardCurrentSnapshotVersion(boardId);
+  const snapshot = currentVersion
+    ? await getBoardSnapshotByVersion(boardId, currentVersion)
+    : await getLatestBoardSnapshot(boardId);
 
-  const snapshotData = latestSnapshot.data as { shapes?: unknown };
-  const shapes = Array.isArray(snapshotData.shapes) ? snapshotData.shapes : [];
+  const shapes = extractShapesFromSnapshot(snapshot);
 
   if (shapes.length === 0) {
     return;
@@ -107,19 +123,6 @@ const debouncedPersist = (boardId: string, doc: Y.Doc, userId?: string) => {
   );
 };
 
-const getUndoManager = (boardId: string, doc: Y.Doc) => {
-  if (undoManagers.has(boardId)) {
-    return undoManagers.get(boardId)!;
-  }
-
-  const boardMap = doc.getMap("board");
-  const undoManager = new Y.UndoManager(boardMap, {
-    trackedOrigins: new Set([CLIENT_UPDATE_ORIGIN]),
-  });
-  undoManagers.set(boardId, undoManager);
-  return undoManager;
-};
-
 export const registerBoardEvents = (io: Server, socket: Socket) => {
   let activeBoardId: string | null = null;
 
@@ -144,7 +147,6 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       socket.join(boardId);
       const doc = getYDoc(boardId);
       await hydrateDocFromPersistence(boardId, doc);
-      getUndoManager(boardId, doc);
 
       // 1. Initial Sync: Send the full current state to the new user
       const state = Y.encodeStateAsUpdate(doc);
@@ -324,13 +326,33 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       return;
     }
 
-    const doc = getYDoc(boardId);
-    const undoManager = getUndoManager(boardId, doc);
+    const pendingTimer = persistTimers.get(boardId);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      persistTimers.delete(boardId);
+    }
 
-    undoManager.undo();
+    const latestSnapshot = await getLatestBoardSnapshot(boardId);
+    if (!latestSnapshot) return;
+
+    let currentVersion = await getBoardCurrentSnapshotVersion(boardId);
+    if (!currentVersion) {
+      currentVersion = latestSnapshot.version;
+      await setBoardCurrentSnapshotVersion(boardId, currentVersion);
+    }
+
+    const previousSnapshot = await getSnapshotBeforeVersion(boardId, currentVersion);
+    if (!previousSnapshot) return;
+
+    const shapes = extractShapesFromSnapshot(previousSnapshot);
+    const doc = getYDoc(boardId);
+    applyShapesToDoc(doc, shapes);
+
+    await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
+    await setBoardCurrentSnapshotVersion(boardId, previousSnapshot.version);
+
     const state = Y.encodeStateAsUpdate(doc);
     io.to(boardId).emit("board:state", Array.from(state));
-    await persistBoardStateNow(boardId, doc, socket.data.user?.id);
   });
 
   socket.on("board:redo", async ({ boardId }: { boardId: string }) => {
@@ -343,13 +365,33 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       return;
     }
 
-    const doc = getYDoc(boardId);
-    const undoManager = getUndoManager(boardId, doc);
+    const pendingTimer = persistTimers.get(boardId);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      persistTimers.delete(boardId);
+    }
 
-    undoManager.redo();
+    const latestSnapshot = await getLatestBoardSnapshot(boardId);
+    if (!latestSnapshot) return;
+
+    let currentVersion = await getBoardCurrentSnapshotVersion(boardId);
+    if (!currentVersion) {
+      currentVersion = latestSnapshot.version;
+      await setBoardCurrentSnapshotVersion(boardId, currentVersion);
+    }
+
+    const nextSnapshot = await getSnapshotAfterVersion(boardId, currentVersion);
+    if (!nextSnapshot) return;
+
+    const shapes = extractShapesFromSnapshot(nextSnapshot);
+    const doc = getYDoc(boardId);
+    applyShapesToDoc(doc, shapes);
+
+    await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
+    await setBoardCurrentSnapshotVersion(boardId, nextSnapshot.version);
+
     const state = Y.encodeStateAsUpdate(doc);
     io.to(boardId).emit("board:state", Array.from(state));
-    await persistBoardStateNow(boardId, doc, socket.data.user?.id);
   });
 
   socket.on("board:leave", async (boardId: string) => {

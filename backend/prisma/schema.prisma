@@ -33,6 +33,7 @@ model Board {
   logs      AuditLog[]
   settings  BoardSettings?
   thumbnailUrl String?
+  currentSnapshotVersion Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -80,6 +81,8 @@ model Snapshot {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([boardId, version])
 }
 
 model Message {

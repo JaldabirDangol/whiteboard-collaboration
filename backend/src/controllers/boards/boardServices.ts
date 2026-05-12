@@ -6,6 +6,7 @@ export async function createBoard(data: { title: string; userId: string; thumbna
     data: {
       title: data.title,
       thumbnailUrl: data.thumbnailUrl ?? null,
+      currentSnapshotVersion: null,
       members: {
         create: {
           userId: data.userId,
@@ -273,12 +274,57 @@ export async function saveBoardSnapshot(boardId: string, data: unknown) {
   const latest = await getLatestBoardSnapshot(boardId);
   const nextVersion = latest ? latest.version + 1 : 1;
 
-  return await prisma.snapshot.create({
-    data: {
-      boardId,
-      version: nextVersion,
-      data: data as any,
-    },
+  return await prisma.$transaction(async (tx) => {
+    const snapshot = await tx.snapshot.create({
+      data: {
+        boardId,
+        version: nextVersion,
+        data: data as any,
+      },
+    });
+
+    await tx.board.update({
+      where: { id: boardId },
+      data: { currentSnapshotVersion: nextVersion },
+    });
+
+    return snapshot;
+  });
+}
+
+export async function getBoardCurrentSnapshotVersion(boardId: string) {
+  const board = await prisma.board.findUnique({
+    where: { id: boardId },
+    select: { currentSnapshotVersion: true },
+  });
+
+  return board?.currentSnapshotVersion ?? null;
+}
+
+export async function setBoardCurrentSnapshotVersion(boardId: string, version: number | null) {
+  return await prisma.board.update({
+    where: { id: boardId },
+    data: { currentSnapshotVersion: version },
+  });
+}
+
+export async function getBoardSnapshotByVersion(boardId: string, version: number) {
+  return await prisma.snapshot.findUnique({
+    where: { boardId_version: { boardId, version } },
+  });
+}
+
+export async function getSnapshotBeforeVersion(boardId: string, version: number) {
+  return await prisma.snapshot.findFirst({
+    where: { boardId, version: { lt: version } },
+    orderBy: { version: "desc" },
+  });
+}
+
+export async function getSnapshotAfterVersion(boardId: string, version: number) {
+  return await prisma.snapshot.findFirst({
+    where: { boardId, version: { gt: version } },
+    orderBy: { version: "asc" },
   });
 }
 

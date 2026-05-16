@@ -1,18 +1,20 @@
 "use client";
 
 import type { Stage as KonvaStage } from "konva/lib/Stage";
+import type { KonvaEventObject } from "konva/lib/Node";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { Circle, Group, Layer, Line, Rect, Stage, Text } from "react-konva";
+import { Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text } from "react-konva";
 import { Minus, Plus } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import Header from "@/components/canvas/header";
 import { useUserStore } from "@/store/useUserStore";
 import { useToolStore } from "@/store/useToolStore";
-import { getBoardDetails, getPersistedBoardShapes, joinBoard, shareBoard } from "@/lib/api";
+import { apiUrl } from "@/constant";
+import { getBoardDetails, getPersistedBoardShapes, joinBoard, shareBoard, uploadBoardImage } from "@/lib/api";
 import { toast } from "sonner";
-import type { RectShape } from "./board-types";
-import { normalizeShapesForClient } from "./board-shape-utils";
+import type { ImageShape, LaserStroke, RectShape } from "./board-types";
+import { newShapeId, normalizeShapesForClient } from "./board-shape-utils";
 import { AVATAR_COLORS, getInitials, getStoredProfile } from "./board-profile-utils";
 import BoardTopBar from "./board-top-bar";
 import BoardRightPanel from "./board-right-panel";
@@ -38,7 +40,7 @@ export default function Page() {
 
   const [stageSize, setStageSize] = useState({ width: 1, height: 1 });
   const [mounted, setMounted] = useState(false);
-  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
+  const [selectedShapeIds, setSelectedShapeIds] = useState<Set<string>>(new Set());
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -51,6 +53,7 @@ export default function Page() {
   const [rightPanelTab, setRightPanelTab] = useState<"activity" | "chat" | "comments">("chat");
   const [draftDisplayName, setDraftDisplayName] = useState("");
   const [draftAvatarColor, setDraftAvatarColor] = useState(AVATAR_COLORS[0]);
+  const [laserStrokes, setLaserStrokes] = useState<LaserStroke[]>([]);
 
   const { data: boardDetails } = useQuery({
     queryKey: ["board-details", id],
@@ -103,9 +106,9 @@ export default function Page() {
     color,
     strokeWidth,
     setShapes,
-    persistShapes,
     updateShapesLocally,
     emitCursorMove,
+    setLaserStrokes,
   });
 
   const cursorLabelByUserId = useMemo(() => {
@@ -242,6 +245,49 @@ export default function Page() {
     event.target.value = "";
 
     if (!file) return;
+
+    if (file.type.startsWith("image/")) {
+      try {
+        const asset = await uploadBoardImage(id, file);
+        const apiOrigin = apiUrl.replace(/\/api\/?$/, "");
+        const imageUrl = asset.url.startsWith("http") ? asset.url : `${apiOrigin}${asset.url}`;
+
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const image = new window.Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error("Unable to load image"));
+          image.crossOrigin = "anonymous";
+          image.src = imageUrl;
+        });
+
+        const maxWidth = 480;
+        const scale = Math.min(1, maxWidth / Math.max(1, img.width));
+        const width = Math.max(40, img.width * scale);
+        const height = Math.max(40, img.height * scale);
+
+        const centerX = (stageSize.width / 2 - viewport.x) / zoom;
+        const centerY = (stageSize.height / 2 - viewport.y) / zoom;
+
+        const shape: ImageShape = {
+          id: newShapeId(),
+          type: "image",
+          x: centerX - width / 2,
+          y: centerY - height / 2,
+          width,
+          height,
+          url: imageUrl,
+          color: "#000000",
+          strokeWidth: 1,
+        };
+
+        updateShapesLocally((prev) => [...prev, shape]);
+        setActiveTopTab("Files");
+        toast.success("Image added to canvas");
+      } catch (error) {
+        toast.error((error as Error).message || "Unable to upload image");
+      }
+      return;
+    }
 
     try {
       const text = await file.text();
@@ -380,9 +426,73 @@ export default function Page() {
     };
   }, []);
 
+  // Multi-select helper functions
+  const handleShapeSelect = (shapeId: string, shiftKey: boolean) => {
+    if (!canEditBoard || activeCanvasTool !== "select") return;
+
+    if (shiftKey) {
+      // Toggle shape in multi-select
+      setSelectedShapeIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(shapeId)) {
+          next.delete(shapeId);
+        } else {
+          next.add(shapeId);
+        }
+        return next;
+      });
+    } else {
+      // Single select
+      setSelectedShapeIds(new Set([shapeId]));
+    }
+  };
+
+  const isShapeSelected = (shapeId: string) => selectedShapeIds.has(shapeId);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!canEditBoard) return;
+
+      // Delete selected shapes
+      if (e.key === "Delete" && selectedShapeIds.size > 0) {
+        e.preventDefault();
+        updateShapesLocally((prev) =>
+          prev.filter((shape) => !selectedShapeIds.has(shape.id))
+        );
+        persistShapes(
+          shapes.filter((shape) => !selectedShapeIds.has(shape.id))
+        );
+        setSelectedShapeIds(new Set());
+        toast.success(`Deleted ${selectedShapeIds.size} shape(s)`);
+      }
+
+      // Ctrl/Cmd+Z for undo
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        requestHistoryEvent("undo");
+      }
+
+      // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y for redo
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+        e.preventDefault();
+        requestHistoryEvent("redo");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [canEditBoard, selectedShapeIds, shapes, updateShapesLocally, persistShapes]);
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#f8fafc]">
-      <input ref={fileInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleFileImport} />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,application/json,image/*"
+        className="hidden"
+        onChange={handleFileImport}
+      />
 
       <BoardTopBar
         boardTitle={boardDetails?.title || "Project Draft"}
@@ -434,7 +544,7 @@ export default function Page() {
       />
 
       <div className="relative flex min-h-0 flex-1">
-        <aside className="hidden w-20 border-r border-slate-200 bg-white md:flex md:items-start md:justify-center">
+        <aside className="hidden w-20 border-r border-slate-200 bg-linear-to-b from-white via-white to-slate-50 px-2 py-3 md:flex md:items-start md:justify-center">
           <Header layout="vertical" disabled={mounted && !canEditBoard} />
         </aside>
 
@@ -457,13 +567,24 @@ export default function Page() {
             onTouchEnd={handlePointerUp}
             onTouchCancel={handlePointerUp}
             onWheel={handleWheel}
-            onMouseDownCapture={() => {
-              if (activeCanvasTool === "select") {
-                setSelectedShapeId(null);
+            onMouseDownCapture={(e: KonvaEventObject<MouseEvent>) => {
+              if (activeCanvasTool === "select" && !e.evt.shiftKey) {
+                // Only clear on empty space click (not on shape), handled by checking if target is Stage
+                if ((e.target as any).nodeType === "Stage") {
+                  setSelectedShapeIds(new Set());
+                }
               }
             }}
           >
             <Layer>
+              <Rect
+                x={0}
+                y={0}
+                width={stageSize.width}
+                height={stageSize.height}
+                fill="white"
+                listening={false}
+              />
               <Group x={viewport.x} y={viewport.y} scaleX={zoom} scaleY={zoom}>
                 {renderedShapes.map((shape) => {
                   if (shape.type === "line") {
@@ -477,17 +598,22 @@ export default function Page() {
                         lineCap="round"
                         lineJoin="round"
                         draggable={canEditBoard && selectedTool === "select"}
-                        onClick={() => setSelectedShapeId(shape.id)}
-                        onTap={() => setSelectedShapeId(shape.id)}
+                        onClick={(e) => {
+                          e.cancelBubble = true;
+                          handleShapeSelect(shape.id, e.evt.shiftKey);
+                        }}
+                        onTap={(e) => {
+                          handleShapeSelect(shape.id, false);
+                        }}
                         onDragEnd={(event) => {
                           if (!canEditBoard || selectedTool !== "select") return;
                           const pos = event.target.position();
                           updateShapePosition(shape.id, pos.x, pos.y);
                           event.target.position({ x: 0, y: 0 });
                         }}
-                        shadowEnabled={selectedShapeId === shape.id}
+                        shadowEnabled={isShapeSelected(shape.id)}
                         shadowColor="#6366f1"
-                        shadowBlur={selectedShapeId === shape.id ? 8 : 0}
+                        shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
                         globalCompositeOperation={
                           shape.tool === "eraser" ? "destination-out" : "source-over"
                         }
@@ -508,19 +634,37 @@ export default function Page() {
                         strokeWidth={rect.strokeWidth}
                         fill="transparent"
                         draggable={canEditBoard && selectedTool === "select"}
-                        onClick={() => setSelectedShapeId(shape.id)}
-                        onTap={() => setSelectedShapeId(shape.id)}
+                        onClick={(e) => {
+                          e.cancelBubble = true;
+                          handleShapeSelect(shape.id, e.evt.shiftKey);
+                        }}
+                        onTap={() => {
+                          handleShapeSelect(shape.id, false);
+                        }}
                         onDragEnd={(event) => {
                           if (!canEditBoard || selectedTool !== "select") return;
                           const pos = event.target.position();
                           updateShapePosition(shape.id, pos.x, pos.y);
                         }}
-                        shadowEnabled={selectedShapeId === shape.id}
+                        shadowEnabled={isShapeSelected(shape.id)}
                         shadowColor="#6366f1"
-                        shadowBlur={selectedShapeId === shape.id ? 8 : 0}
+                        shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
                       />
                     );
                   }
+
+                    if (shape.type === "image") {
+                      return (
+                        <BoardImageShape
+                          key={shape.id}
+                          shape={shape}
+                          draggable={canEditBoard && selectedTool === "select"}
+                          selected={isShapeSelected(shape.id)}
+                          onSelect={(shiftKey) => handleShapeSelect(shape.id, shiftKey)}
+                          onDragEnd={(x, y) => updateShapePosition(shape.id, x, y)}
+                        />
+                      );
+                    }
 
                   return (
                     <Circle
@@ -532,19 +676,102 @@ export default function Page() {
                       strokeWidth={shape.strokeWidth}
                       fill="transparent"
                       draggable={canEditBoard && selectedTool === "select"}
-                      onClick={() => setSelectedShapeId(shape.id)}
-                      onTap={() => setSelectedShapeId(shape.id)}
+                      onClick={(e) => {
+                        e.cancelBubble = true;
+                        handleShapeSelect(shape.id, e.evt.shiftKey);
+                      }}
+                      onTap={() => {
+                        handleShapeSelect(shape.id, false);
+                      }}
                       onDragEnd={(event) => {
                         if (!canEditBoard || selectedTool !== "select") return;
                         const pos = event.target.position();
                         updateShapePosition(shape.id, pos.x, pos.y);
                       }}
-                      shadowEnabled={selectedShapeId === shape.id}
+                      shadowEnabled={isShapeSelected(shape.id)}
                       shadowColor="#6366f1"
-                      shadowBlur={selectedShapeId === shape.id ? 8 : 0}
+                      shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
                     />
                   );
-                })}
+                }
+
+                if (shape.type === "ellipse") {
+                  return (
+                    <Ellipse
+                      key={shape.id}
+                      x={shape.x}
+                      y={shape.y}
+                      radiusX={shape.radiusX}
+                      radiusY={shape.radiusY}
+                      stroke={shape.color}
+                      strokeWidth={shape.strokeWidth}
+                      fill={shape.fill || "transparent"}
+                      draggable={canEditBoard && selectedTool === "select"}
+                      onClick={(e) => {
+                        e.cancelBubble = true;
+                        handleShapeSelect(shape.id, e.evt.shiftKey);
+                      }}
+                      onTap={() => {
+                        handleShapeSelect(shape.id, false);
+                      }}
+                      onDragEnd={(event) => {
+                        if (!canEditBoard || selectedTool !== "select") return;
+                        const pos = event.target.position();
+                        updateShapePosition(shape.id, pos.x, pos.y);
+                      }}
+                      shadowEnabled={isShapeSelected(shape.id)}
+                      shadowColor="#6366f1"
+                      shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
+                    />
+                  );
+                }
+
+                if (shape.type === "text") {
+                  return (
+                    <Text
+                      key={shape.id}
+                      x={shape.x}
+                      y={shape.y}
+                      text={shape.text}
+                      fontSize={shape.fontSize}
+                      fontFamily={shape.fontFamily || "Arial"}
+                      fill={shape.color}
+                      draggable={canEditBoard && selectedTool === "select"}
+                      onClick={(e) => {
+                        e.cancelBubble = true;
+                        handleShapeSelect(shape.id, e.evt.shiftKey);
+                      }}
+                      onTap={() => {
+                        handleShapeSelect(shape.id, false);
+                      }}
+                      onDragEnd={(event) => {
+                        if (!canEditBoard || selectedTool !== "select") return;
+                        const pos = event.target.position();
+                        updateShapePosition(shape.id, pos.x, pos.y);
+                      }}
+                      shadowEnabled={isShapeSelected(shape.id)}
+                      shadowColor="#6366f1"
+                      shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
+                    />
+                  );
+                }
+
+                return null;
+
+            <Layer listening={false}>
+              <Group x={viewport.x} y={viewport.y} scaleX={zoom} scaleY={zoom}>
+                {laserStrokes.map((stroke) => (
+                  <Line
+                    key={stroke.id}
+                    points={stroke.points}
+                    stroke={stroke.color}
+                    strokeWidth={stroke.strokeWidth}
+                    tension={0.5}
+                    lineCap="round"
+                    lineJoin="round"
+                    opacity={0.85}
+                  />
+                ))}
               </Group>
             </Layer>
 
@@ -604,3 +831,74 @@ export default function Page() {
     </div>
   );
 }
+
+const BoardImageShape = ({
+  shape,
+  draggable,
+  selected,
+  onSelect,
+  onDragEnd,
+}: {
+  shape: ImageShape;
+  draggable: boolean;
+  selected: boolean;
+  onSelect: (shiftKey: boolean) => void;
+  onDragEnd: (x: number, y: number) => void;
+}) => {
+  const image = useImageElement(shape.url);
+
+  return (
+    <KonvaImage
+      image={image ?? undefined}
+      x={shape.x}
+      y={shape.y}
+      width={shape.width}
+      height={shape.height}
+      draggable={draggable}
+      onClick={(e) => {
+        e.cancelBubble = true;
+        onSelect(e.evt.shiftKey);
+      }}
+      onTap={() => {
+        onSelect(false);
+      }}
+      onDragEnd={(event) => {
+        const pos = event.target.position();
+        onDragEnd(pos.x, pos.y);
+      }}
+      stroke={selected ? "#6366f1" : undefined}
+      strokeWidth={selected ? 2 : 0}
+      shadowEnabled={selected}
+      shadowColor="#6366f1"
+      shadowBlur={selected ? 8 : 0}
+    />
+  );
+};
+
+const useImageElement = (url: string) => {
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    if (!url) {
+      setImage(null);
+      return;
+    }
+
+    let active = true;
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      if (active) setImage(img);
+    };
+    img.onerror = () => {
+      if (active) setImage(null);
+    };
+    img.src = url;
+
+    return () => {
+      active = false;
+    };
+  }, [url]);
+
+  return image;
+};

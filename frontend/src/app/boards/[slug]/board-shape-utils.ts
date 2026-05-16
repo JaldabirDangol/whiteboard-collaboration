@@ -49,6 +49,22 @@ const coerceShape = (raw: unknown, index: number): BoardShape | null => {
     return null;
   }
 
+  if (typeRaw === "image" || typeof shape.url === "string" || typeof shape.src === "string") {
+    const url = typeof shape.url === "string" ? shape.url : typeof shape.src === "string" ? shape.src : "";
+    if (!url) return null;
+    return {
+      id,
+      type: "image",
+      x: toFiniteNumber(shape.x, 0),
+      y: toFiniteNumber(shape.y, 0),
+      width: Math.max(1, toFiniteNumber(shape.width, 320)),
+      height: Math.max(1, toFiniteNumber(shape.height, 200)),
+      url,
+      color,
+      strokeWidth,
+    };
+  }
+
   if (typeRaw === "rectangle" || typeRaw === "rect" || (shape.width !== undefined && shape.height !== undefined)) {
     return {
       id,
@@ -70,6 +86,34 @@ const coerceShape = (raw: unknown, index: number): BoardShape | null => {
       x: toFiniteNumber(shape.x, 0),
       y: toFiniteNumber(shape.y, 0),
       radius,
+      color,
+      strokeWidth,
+    };
+  }
+
+  if (typeRaw === "ellipse" || shape.radiusX !== undefined) {
+    return {
+      id,
+      type: "ellipse",
+      x: toFiniteNumber(shape.x, 0),
+      y: toFiniteNumber(shape.y, 0),
+      radiusX: Math.abs(toFiniteNumber(shape.radiusX, 50)),
+      radiusY: Math.abs(toFiniteNumber(shape.radiusY, 30)),
+      color,
+      strokeWidth,
+    };
+  }
+
+  if (typeRaw === "text" || typeof shape.text === "string") {
+    const text = typeof shape.text === "string" ? shape.text : "";
+    return {
+      id,
+      type: "text",
+      x: toFiniteNumber(shape.x, 0),
+      y: toFiniteNumber(shape.y, 0),
+      text,
+      fontSize: Math.max(8, toFiniteNumber(shape.fontSize, 16)),
+      fontFamily: typeof shape.fontFamily === "string" ? shape.fontFamily : "Arial",
       color,
       strokeWidth,
     };

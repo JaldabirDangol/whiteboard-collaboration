@@ -161,7 +161,7 @@ export default function Chat({
 	};
 
 	return (
-		<aside className={cn("flex h-full w-full flex-col border-r border-slate-200 bg-slate-50/70", className)}>
+		<aside className={cn("flex h-full min-h-0 w-full flex-col border-r border-slate-200 bg-slate-50/70", className)}>
 			{showHeader ? (
 				<div className="border-b border-slate-200 px-4 py-3">
 					<div className="flex items-center justify-between gap-2">
@@ -182,7 +182,7 @@ export default function Chat({
 				</div>
 			) : null}
 
-			<div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+			<div ref={listRef} className="flex-1 min-h-0 space-y-3 overflow-y-auto px-4 py-4">
 				{loading ? <p className="text-sm text-slate-500">Loading messages...</p> : null}
 
 				{!loading && sortedMessages.length === 0 ? (
@@ -224,7 +224,7 @@ export default function Chat({
 				})}
 			</div>
 
-			<div className="border-t border-slate-200 px-3 py-3">
+			<div className="border-t border-slate-200 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
 				<div className="flex items-center gap-2">
 					<input
 						value={input}

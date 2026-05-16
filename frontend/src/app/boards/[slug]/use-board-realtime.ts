@@ -32,6 +32,10 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
   const [serverReadOnly, setServerReadOnly] = useState(false);
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
 
+  const setShapesWithCache = useCallback((value: React.SetStateAction<BoardShape[]>) => {
+    setShapes((prev) => (typeof value === "function" ? (value as (prev: BoardShape[]) => BoardShape[])(prev) : value));
+  }, []);
+
   const persistShapes = useCallback((nextShapes: BoardShape[]) => {
     const doc = docRef.current;
     const yBoard = yBoardRef.current;
@@ -39,18 +43,26 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
     const normalizedShapes = normalizeShapesForClient(nextShapes);
 
+    console.log("[persistShapes] client shapes:", normalizedShapes.length, normalizedShapes.map((shape) => shape.type));
+
     doc.transact(() => {
       yBoard.set(SHAPES_KEY, JSON.stringify(normalizedShapes));
     }, LOCAL_ORIGIN);
+
+    socketRef.current?.emit("board:sync", {
+      boardId,
+      shapes: normalizedShapes,
+    });
   }, []);
 
+
   const updateShapesLocally = useCallback((updater: (prev: BoardShape[]) => BoardShape[]) => {
-    setShapes((prev) => {
+    setShapesWithCache((prev) => {
       const next = normalizeShapesForClient(updater(prev));
       persistShapes(next);
       return next;
     });
-  }, [persistShapes]);
+  }, [persistShapes, setShapesWithCache]);
 
   const emitCursorMove = useCallback((position: { x: number; y: number }) => {
     const socket = socketRef.current;
@@ -103,7 +115,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     }
 
     // Update React state
-    setShapes((prev) => {
+    setShapesWithCache((prev) => {
       // If we already have shapes and they're the same count, don't overwrite
       if (prev.length > 0 && prev.length === next.length) {
         console.log("[persistShapes] Already has shapes, skipping");
@@ -130,7 +142,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
     const applySnapshot = () => {
       const snapshot = yBoard.get(SHAPES_KEY);
-      setShapes(normalizeShapesForClient(parseShapes(snapshot)));
+      setShapesWithCache(normalizeShapesForClient(parseShapes(snapshot)));
     };
 
     const onDocUpdate = (update: Uint8Array, origin: unknown) => {
@@ -292,7 +304,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
   return {
     shapes,
-    setShapes,
+    setShapes: setShapesWithCache,
     remoteCursors,
     persistShapes,
     updateShapesLocally,

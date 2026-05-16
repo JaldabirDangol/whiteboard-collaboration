@@ -2,7 +2,7 @@
 
 import { useToolStore, ToolType } from "@/store/useToolStore";
 import { ComponentType, SVGProps } from "react";
-import { Circle, Eraser, LassoSelect, Minus, Pen, Plus, RectangleEllipsis } from "lucide-react";
+import { Circle, Eraser, LassoSelect, Minus, Pen, Plus, RectangleEllipsis, Zap } from "lucide-react";
 
 type Tool = {
   tool: ToolType;
@@ -32,6 +32,10 @@ const tools: Tool[] = [
     icon: Eraser,
   },
   {
+    tool: "laser",
+    icon: Zap,
+  },
+  {
     tool: "rectangle",
     icon: RectangleEllipsis,
   },
@@ -53,7 +57,7 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
 
   if (layout === "vertical") {
     return (
-      <div className={`pointer-events-auto mt-3 flex h-[calc(100%-1.5rem)] w-16 flex-col items-center rounded-3xl py-3 shadow-sm ${
+      <div className={`pointer-events-auto mt-3 flex h-[calc(100%-1.5rem)] w-16 flex-col items-center rounded-3xl border border-slate-200/80 bg-white/90 py-3 shadow-lg shadow-slate-200/60 backdrop-blur ${
         disabled ? "opacity-70" : ""
       }`}>
         <div className="flex flex-col items-center gap-2.5">
@@ -67,13 +71,13 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
                 disabled={disabled}
                 onClick={() => setTool(t.tool)}
                 title={t.tool}
-                className={`grid h-11 w-11 place-items-center rounded-2xl transition ${
+                className={`grid h-11 w-11 place-items-center rounded-2xl border border-transparent transition ${
                   disabled
                     ? "cursor-not-allowed bg-slate-100 text-slate-400"
                     :
                   selected === t.tool
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
-                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    ? "border-indigo-200 bg-indigo-600 text-white shadow-md shadow-indigo-200 ring-2 ring-indigo-300/50"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -90,7 +94,7 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
           disabled={disabled}
           value={color}
           onChange={(event) => setColor(event.target.value)}
-          className="h-9 w-9 cursor-pointer rounded-xl border border-slate-300 bg-transparent p-1"
+          className="h-9 w-9 cursor-pointer rounded-xl border border-slate-300 bg-white p-1 shadow-sm"
         />
 
         <input
@@ -139,7 +143,7 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
                 disabled
                   ? "cursor-not-allowed bg-slate-100 text-slate-300"
                   :
-                strokeWidth === preset ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300"
+                strokeWidth === preset ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
               <span className="rounded-full bg-current" style={{ width: Math.max(2, preset), height: Math.max(2, preset) }} />

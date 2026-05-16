@@ -189,3 +189,32 @@ export async function getPersistedBoardShapes(boardId: string) {
 
   return Array.isArray(json?.shapes) ? json.shapes : [];
 }
+
+export type BoardAsset = {
+  id: string;
+  boardId: string;
+  url: string;
+  type: "IMAGE" | "PDF" | "VIDEO" | "FILE";
+  uploadedBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function uploadBoardImage(boardId: string, file: File): Promise<BoardAsset> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("boardId", boardId);
+
+  const res = await fetch(`${apiUrl}/upload`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Failed to upload image");
+  }
+
+  return json as BoardAsset;
+}

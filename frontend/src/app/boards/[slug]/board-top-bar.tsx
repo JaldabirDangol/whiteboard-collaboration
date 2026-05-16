@@ -93,10 +93,10 @@ export default function BoardTopBar({
       <div className="flex min-w-0 items-center gap-3">
         <p className="truncate text-sm font-semibold text-slate-900">{boardTitle}</p>
         <span
-          className={`hidden rounded-full px-2 py-0.5 text-[11px] font-medium md:inline-flex ${
+          className={`hidden items-center rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide md:inline-flex ${
             isViewOnly
-              ? "bg-amber-100 text-amber-800"
-              : "bg-emerald-100 text-emerald-800"
+              ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200/70"
+              : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/70"
           }`}
           title={isViewOnly ? "You can view but cannot edit this board" : "You can edit this board"}
         >

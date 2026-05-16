@@ -1,20 +1,23 @@
 import type { KonvaEventObject } from "konva/lib/Node";
 import { useEffect, useRef, useState } from "react";
 import type { ToolType } from "@/store/useToolStore";
-import type { BoardShape, RectShape } from "./board-types";
-import { newShapeId, normalizeShapesForClient } from "./board-shape-utils";
+import type { BoardShape, LaserStroke, RectShape } from "./board-types";
+import { newShapeId } from "./board-shape-utils";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
+const LASER_TTL_MS = 1000;
+const LASER_COLOR = "#f23523";
+const MIN_DRAW_DELTA = 0.5;
 
 type UseBoardCanvasInteractionsArgs = {
   selectedTool: ToolType;
   color: string;
   strokeWidth: number;
   setShapes: React.Dispatch<React.SetStateAction<BoardShape[]>>;
-  persistShapes: (nextShapes: BoardShape[]) => void;
   updateShapesLocally: (updater: (prev: BoardShape[]) => BoardShape[]) => void;
   emitCursorMove: (position: { x: number; y: number }) => void;
+  setLaserStrokes: React.Dispatch<React.SetStateAction<LaserStroke[]>>;
 };
 
 export const useBoardCanvasInteractions = ({
@@ -22,9 +25,9 @@ export const useBoardCanvasInteractions = ({
   color,
   strokeWidth,
   setShapes,
-  persistShapes,
   updateShapesLocally,
   emitCursorMove,
+  setLaserStrokes,
 }: UseBoardCanvasInteractionsArgs) => {
   const [zoom, setZoom] = useState(1);
   const [viewport, setViewport] = useState({ x: 0, y: 0 });
@@ -35,8 +38,12 @@ export const useBoardCanvasInteractions = ({
   const panStart = useRef({ x: 0, y: 0 });
   const viewportStart = useRef({ x: 0, y: 0 });
   const draftShapeId = useRef<string | null>(null);
+  const laserDraftId = useRef<string | null>(null);
+  const laserTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const lastDrawPoint = useRef<{ x: number; y: number } | null>(null);
 
   const canDraw = selectedTool !== "select";
+  const isLaser = selectedTool === "laser";
 
   const clampZoom = (value: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
 
@@ -82,6 +89,13 @@ export const useBoardCanvasInteractions = ({
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      laserTimers.current.forEach((timer) => window.clearTimeout(timer));
+      laserTimers.current.clear();
+    };
+  }, []);
+
   const handlePointerDown = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
     const stage = e.target.getStage();
     const screenPointer = stage?.getPointerPosition();
@@ -103,10 +117,26 @@ export const useBoardCanvasInteractions = ({
     isDrawing.current = true;
     const id = newShapeId();
     draftShapeId.current = id;
+    lastDrawPoint.current = pointer;
+
+    if (isLaser) {
+      laserDraftId.current = id;
+      setLaserStrokes((prev) => [
+        ...prev,
+        {
+          id,
+          points: [pointer.x, pointer.y],
+          color: LASER_COLOR,
+          strokeWidth,
+          createdAt: Date.now(),
+        },
+      ]);
+      return;
+    }
 
     setShapes((prev) => {
       if (selectedTool === "pen" || selectedTool === "eraser") {
-        return normalizeShapesForClient([
+        return [
           ...prev,
           {
             id,
@@ -116,11 +146,25 @@ export const useBoardCanvasInteractions = ({
             color,
             strokeWidth,
           },
-        ]);
+        ];
+      }
+
+      if (selectedTool === "line") {
+        return [
+          ...prev,
+          {
+            id,
+            type: "line",
+            tool: "line",
+            points: [pointer.x, pointer.y],
+            color,
+            strokeWidth,
+          },
+        ];
       }
 
       if (selectedTool === "rectangle") {
-        return normalizeShapesForClient([
+        return [
           ...prev,
           {
             id,
@@ -132,11 +176,11 @@ export const useBoardCanvasInteractions = ({
             color,
             strokeWidth,
           },
-        ]);
+        ];
       }
 
       if (selectedTool === "circle") {
-        return normalizeShapesForClient([
+        return [
           ...prev,
           {
             id,
@@ -147,7 +191,41 @@ export const useBoardCanvasInteractions = ({
             color,
             strokeWidth,
           },
-        ]);
+        ];
+      }
+
+      if (selectedTool === "ellipse") {
+        return [
+          ...prev,
+          {
+            id,
+            type: "ellipse",
+            x: pointer.x,
+            y: pointer.y,
+            radiusX: 0,
+            radiusY: 0,
+            color,
+            strokeWidth,
+          },
+        ];
+      }
+
+      if (selectedTool === "text") {
+        // For text, we'll create it immediately - text input handled separately
+        return [
+          ...prev,
+          {
+            id,
+            type: "text",
+            x: pointer.x,
+            y: pointer.y,
+            text: "Click to edit",
+            fontSize: 16,
+            fontFamily: "Arial",
+            color,
+            strokeWidth: 1,
+          },
+        ];
       }
 
       return prev;
@@ -178,11 +256,40 @@ export const useBoardCanvasInteractions = ({
     const targetId = draftShapeId.current;
     if (!targetId) return;
 
+    if (lastDrawPoint.current) {
+      const dx = pointer.x - lastDrawPoint.current.x;
+      const dy = pointer.y - lastDrawPoint.current.y;
+      if (Math.hypot(dx, dy) < MIN_DRAW_DELTA) return;
+    }
+    lastDrawPoint.current = pointer;
+
+    if (isLaser && laserDraftId.current === targetId) {
+      setLaserStrokes((prev) =>
+        prev.map((stroke) =>
+          stroke.id === targetId
+            ? {
+                ...stroke,
+                points: [...stroke.points, pointer.x, pointer.y],
+              }
+            : stroke
+        )
+      );
+      return;
+    }
+
     setShapes((prev) => {
       const next = prev.map((shape) => {
         if (shape.id !== targetId) return shape;
 
         if (shape.type === "line") {
+          // For straight line tool, only use end points
+          if (shape.tool === "line") {
+            return {
+              ...shape,
+              points: [lastDrawPoint.current?.x ?? pointer.x, lastDrawPoint.current?.y ?? pointer.y, pointer.x, pointer.y],
+            };
+          }
+          // For pen, keep adding points
           return {
             ...shape,
             points: [...shape.points, pointer.x, pointer.y],
@@ -197,16 +304,29 @@ export const useBoardCanvasInteractions = ({
           };
         }
 
-        const dx = pointer.x - shape.x;
-        const dy = pointer.y - shape.y;
+        if (shape.type === "circle") {
+          const dx = pointer.x - shape.x;
+          const dy = pointer.y - shape.y;
+          return {
+            ...shape,
+            radius: Math.sqrt(dx * dx + dy * dy),
+          };
+        }
 
-        return {
-          ...shape,
-          radius: Math.sqrt(dx * dx + dy * dy),
-        };
+        if (shape.type === "ellipse") {
+          const dx = Math.abs(pointer.x - shape.x);
+          const dy = Math.abs(pointer.y - shape.y);
+          return {
+            ...shape,
+            radiusX: dx,
+            radiusY: dy,
+          };
+        }
+
+        return shape;
       });
 
-      return normalizeShapesForClient(next);
+      return next;
     });
   };
 
@@ -234,11 +354,21 @@ export const useBoardCanvasInteractions = ({
     if (!isDrawing.current) return;
 
     isDrawing.current = false;
+    const laserId = laserDraftId.current;
     draftShapeId.current = null;
-    setShapes((prev) => {
-      persistShapes(prev);
-      return prev;
-    });
+    laserDraftId.current = null;
+    lastDrawPoint.current = null;
+
+    if (isLaser && laserId) {
+      const timer = window.setTimeout(() => {
+        setLaserStrokes((prev) => prev.filter((stroke) => stroke.id !== laserId));
+        laserTimers.current.delete(laserId);
+      }, LASER_TTL_MS);
+      laserTimers.current.set(laserId, timer as unknown as NodeJS.Timeout);
+      return;
+    }
+
+    updateShapesLocally((prev) => prev);
   };
 
   const normalizeRect = (shape: RectShape): RectShape => {

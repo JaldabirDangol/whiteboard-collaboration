@@ -95,6 +95,7 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
   try {
     const shapes = parseShapesFromYDoc(doc);
     console.log(`[board:persist] Saving ${shapes.length} shapes for board ${boardId}, userId: ${userId}`);
+    console.log("[board:persist] Shape types:", shapes.map((shape: Record<string, unknown>) => shape.type));
 
     // Always save snapshot
     await saveBoardSnapshot(boardId, { shapes });
@@ -189,12 +190,30 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
     Y.applyUpdate(doc, normalizedUpdate, CLIENT_UPDATE_ORIGIN);
     console.log("[yjs:update] Applied update to Y.Doc");
 
+    const docShapes = parseShapesFromYDoc(doc);
+    console.log("[yjs:update] Shapes in doc:", docShapes.length, docShapes.map((shape: Record<string, unknown>) => shape.type));
+
     // Broadcast that specific change to everyone else in the room
     socket.to(boardId).emit("yjs:update", Array.from(normalizedUpdate));
 
     // Trigger debounced persist
     debouncedPersist(boardId, doc, socket.data.user?.id);
     console.log("[yjs:update] Triggered debounced persist");
+  });
+
+  socket.on("board:sync", async ({ boardId, shapes }: { boardId: string; shapes: unknown[] }) => {
+    const canEdit = await canEditBoard(socket, boardId);
+    if (!canEdit) {
+      socket.emit("board:forbidden", {
+        boardId,
+        message: "You need editor access to modify this board",
+      });
+      return;
+    }
+
+    const doc = getYDoc(boardId);
+    applyShapesToDoc(doc, Array.isArray(shapes) ? shapes : []);
+    debouncedPersist(boardId, doc, socket.data.user?.id);
   });
 
   // ── Explicit object-level events ──

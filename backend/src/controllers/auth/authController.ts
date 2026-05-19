@@ -6,14 +6,15 @@ import jwt from "jsonwebtoken";
 export async function Signup(req: Request, res: Response) {
     try {
         const { email, password } = req.body;
-        if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
+        const normalizedEmail = email?.trim().toLowerCase();
+        if (!normalizedEmail || !password) return res.status(400).json({ error: "Email and password are required" });
 
-        const existingUser = await prisma.user.findUnique({ where: { email } });
+        const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
         if (existingUser) return res.status(400).json({ error: "Email already in use" });
 
         const user = await prisma.user.create({
             data: {
-                email,
+                email: normalizedEmail,
                 password: await bcrypt.hash(password, 10)
             }
         });

@@ -15,10 +15,12 @@ import {
 import { canAccessBoard, canEditBoard } from "@/socket/boardAccess.js";
 
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const persistCounters = new Map<string, number>();
 
 const SHAPES_KEY = "shapes";
 const CLIENT_UPDATE_ORIGIN = "client-update";
 const PERSIST_DEBOUNCE_MS = 500;
+const SNAPSHOT_INTERVAL = 5; // Save snapshot every N persists
 
 const toUint8 = (value: unknown): Uint8Array => {
   if (value instanceof Uint8Array) return value;
@@ -91,14 +93,18 @@ const hydrateDocFromPersistence = async (boardId: string, doc: Y.Doc) => {
   boardMap.set(SHAPES_KEY, JSON.stringify(shapes));
 };
 
-const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string) => {
+const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string, forceSnapshot = false) => {
   try {
     const shapes = parseShapesFromYDoc(doc);
     console.log(`[board:persist] Saving ${shapes.length} shapes for board ${boardId}, userId: ${userId}`);
     console.log("[board:persist] Shape types:", shapes.map((shape: Record<string, unknown>) => shape.type));
 
-    // Always save snapshot
-    await saveBoardSnapshot(boardId, { shapes });
+    // Save snapshot only every N persists (or on forced flush like board:leave/disconnect)
+    const count = (persistCounters.get(boardId) ?? 0) + 1;
+    persistCounters.set(boardId, count);
+    if (forceSnapshot || count % SNAPSHOT_INTERVAL === 0) {
+      await saveBoardSnapshot(boardId, { shapes });
+    }
 
     // Save shapes to DB - use system as fallback userId if not provided
     const finalUserId = userId || "system";
@@ -422,7 +428,7 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
     }
 
     const doc = getYDoc(boardId);
-    await persistBoardStateNow(boardId, doc, socket.data.user?.id);
+    await persistBoardStateNow(boardId, doc, socket.data.user?.id, true);
 
     socket.leave(boardId);
     if (activeBoardId === boardId) {
@@ -445,7 +451,7 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
     }
 
     const doc = getYDoc(activeBoardId);
-    await persistBoardStateNow(activeBoardId, doc, socket.data.user?.id);
+    await persistBoardStateNow(activeBoardId, doc, socket.data.user?.id, true);
 
     socket.to(activeBoardId).emit("board:userLeft", {
       userId: socket.data.user?.id ?? socket.id,

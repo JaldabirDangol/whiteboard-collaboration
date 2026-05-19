@@ -4,6 +4,7 @@ import { getMe } from "@/lib/api";
 export type User = {
 	id: string;
 	email: string;
+	name?: string | null;
 };
 
 type UserStoreType = {

@@ -1,13 +1,20 @@
 import { Router } from "express";
-import { authMiddleware } from "@/middleware/authMiddleware.js";
+import { prisma } from "@/lib/prisma.js";
 const router: Router = Router();
 import type { Request, Response } from "express";
 
  async function getCurrentUser(req:Request, res:Response) {
   try {
-    const user = req.user; 
-    if (!user) {
+    const tokenUser = req.user;
+    if (!tokenUser) {
       return res.status(401).json({ message: "Unauthorized" });
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: tokenUser.id },
+      select: { id: true, email: true, name: true },
+    });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
     res.json({ user });
   } catch (error) {

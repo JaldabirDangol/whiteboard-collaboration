@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import * as messageService from "./messageService.js";
-import { getIO } from "@/socket/index.js"
+import { getIO } from "@/socket/index.js";
+import { getBoardMember } from "@/controllers/boards/boardServices.js";
 interface SendMessageBody {
   boardId: string;
   content: string;
@@ -26,6 +27,15 @@ export const sendMessage = async (
 
     if (!content || content.trim().length === 0) {
       return res.status(400).json({ message: "Message content cannot be empty" });
+    }
+
+    if (!boardId || typeof boardId !== "string") {
+      return res.status(400).json({ message: "Board ID is required" });
+    }
+
+    const membership = await getBoardMember(boardId, userId);
+    if (!membership) {
+      return res.status(403).json({ message: "You do not have access to this board" });
     }
 
     const message = await messageService.createMessage({
@@ -57,6 +67,11 @@ export const deleteMessage = async (req: Request, res: Response<messageResponse>
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    const membership = await getBoardMember(boardId, userId);
+    if (!membership) {
+      return res.status(403).json({ message: "You do not have access to this board" });
+    }
+
     const deleted = await messageService.deleteMessage(id as string, userId as string);
 
     if (!deleted) {
@@ -76,8 +91,16 @@ export const deleteMessage = async (req: Request, res: Response<messageResponse>
 export const getMessagesByBoard = async (req: Request, res: Response) => {
   try {
     const { boardId } = req.params;
+    const userId = req.user?.id;
     if (!boardId) {
       return res.status(400).json({ message: "Board ID is required" });
+    }
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const membership = await getBoardMember(boardId as string, userId);
+    if (!membership) {
+      return res.status(403).json({ message: "You do not have access to this board" });
     }
     const messages = await messageService.getMessagesByBoard(boardId as string);
     res.status(200).json(messages);

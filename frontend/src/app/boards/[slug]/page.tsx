@@ -11,7 +11,7 @@ import Header from "@/components/canvas/header";
 import { useUserStore } from "@/store/useUserStore";
 import { useToolStore } from "@/store/useToolStore";
 import { apiUrl } from "@/constant";
-import { getBoardDetails, getPersistedBoardShapes, joinBoard, shareBoard, uploadBoardImage } from "@/lib/api";
+import { getBoardDetails, getPersistedBoardShapes, joinBoard, shareBoard, uploadBoardImage, getUserByEmail } from "@/lib/api";
 import { toast } from "sonner";
 import type { ImageShape, LaserStroke, RectShape } from "./board-types";
 import { newShapeId, normalizeShapesForClient } from "./board-shape-utils";
@@ -54,6 +54,7 @@ export default function Page() {
   const [draftDisplayName, setDraftDisplayName] = useState("");
   const [draftAvatarColor, setDraftAvatarColor] = useState(AVATAR_COLORS[0]);
   const [laserStrokes, setLaserStrokes] = useState<LaserStroke[]>([]);
+  const [userSuggestions, setUserSuggestions] = useState<{ id: string; email: string; name?: string | null }[]>([]);
 
   const { data: boardDetails } = useQuery({
     queryKey: ["board-details", id],
@@ -157,7 +158,11 @@ export default function Page() {
   const avatarInitials = getInitials(userLabel);
   const avatarColor = storedProfile.avatarColor;
 
-  const renderedShapes = useMemo(() => shapes, [shapes]);
+  const renderedShapes = useMemo(() => {
+    const seen = new Map<string, typeof shapes[number]>();
+    for (const s of shapes) seen.set(s.id, s);
+    return Array.from(seen.values());
+  }, [shapes]);
 
   const topTabs = ["Files", "Canvas", "Export", "History"] as const;
 
@@ -484,6 +489,21 @@ export default function Page() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [canEditBoard, selectedShapeIds, shapes, updateShapesLocally, persistShapes]);
 
+  // User search for share dialog
+  useEffect(() => {
+    if (shareEmail.trim().length < 2) {
+      setUserSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const user = await getUserByEmail(shareEmail.trim());
+      setUserSuggestions(user ? [user] : []);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [shareEmail]);
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#f8fafc]">
       <input
@@ -517,6 +537,8 @@ export default function Page() {
           shareBoardMutation.mutate({ email, role: shareRole });
         }}
         sharePending={shareBoardMutation.isPending}
+        userSuggestions={userSuggestions}
+        onSelectSuggestion={(email) => setShareEmail(email)}
         shareLink={getShareLink()}
         onCopyShareLink={copyShareLink}
         exportOpen={exportOpen}
@@ -666,6 +688,7 @@ export default function Page() {
                       );
                     }
 
+                if (shape.type === "circle") {
                   return (
                     <Circle
                       key={shape.id}
@@ -757,6 +780,9 @@ export default function Page() {
                 }
 
                 return null;
+              })}
+              </Group>
+            </Layer>
 
             <Layer listening={false}>
               <Group x={viewport.x} y={viewport.y} scaleX={zoom} scaleY={zoom}>

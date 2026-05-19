@@ -21,11 +21,14 @@ type BoardTopBarProps = {
   onShareRoleChange: (value: "EDITOR" | "VIEWER") => void;
   onInviteCollaborator: () => void;
   sharePending: boolean;
+  userSuggestions: { id: string; email: string; name?: string | null }[];
+  onSelectSuggestion: (email: string) => void;
   shareLink: string;
   onCopyShareLink: () => void;
   exportOpen: boolean;
   onExportOpenChange: (open: boolean) => void;
   onExportImage: () => void;
+  onExportSvg?: () => void;
   onExportJson: () => void;
   historyOpen: boolean;
   onHistoryOpenChange: (open: boolean) => void;
@@ -63,11 +66,14 @@ export default function BoardTopBar({
   onShareRoleChange,
   onInviteCollaborator,
   sharePending,
+  userSuggestions,
+  onSelectSuggestion,
   shareLink,
   onCopyShareLink,
   exportOpen,
   onExportOpenChange,
   onExportImage,
+  onExportSvg,
   onExportJson,
   historyOpen,
   onHistoryOpenChange,
@@ -140,13 +146,31 @@ export default function BoardTopBar({
             <div className="space-y-3">
               <div className="space-y-2">
                 <p className="text-sm text-slate-600">Invite a collaborator by email</p>
-                <input
-                  value={shareEmail}
-                  onChange={(event) => onShareEmailChange(event.target.value)}
-                  type="email"
-                  placeholder="teammate@example.com"
-                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
-                />
+                <div className="relative">
+                  <input
+                    value={shareEmail}
+                    onChange={(event) => onShareEmailChange(event.target.value)}
+                    type="email"
+                    placeholder="Search by email..."
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
+                  />
+                  {userSuggestions.length > 0 && (
+                    <ul className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+                      {userSuggestions.map((u) => (
+                        <li key={u.id}>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                            onClick={() => onSelectSuggestion(u.email)}
+                          >
+                            <span className="font-medium text-slate-800">{u.name || u.email.split("@")[0]}</span>
+                            <span className="text-slate-500">{u.email}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
                 <select
                   value={shareRole}
                   onChange={(event) => onShareRoleChange(event.target.value as "EDITOR" | "VIEWER")}
@@ -182,6 +206,11 @@ export default function BoardTopBar({
               <Button type="button" className="w-full" onClick={onExportImage}>
                 Download PNG
               </Button>
+              {onExportSvg && (
+                <Button type="button" variant="outline" className="w-full" onClick={onExportSvg}>
+                  Download SVG
+                </Button>
+              )}
               <Button type="button" variant="outline" className="w-full" onClick={onExportJson}>
                 Download JSON
               </Button>

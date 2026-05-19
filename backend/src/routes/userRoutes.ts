@@ -1,9 +1,11 @@
-import { Signup } from "@/controllers/auth/authController.js";
 import { Router } from "express";
+import * as userController from "@/controllers/user/userController.js";
 
-const userRoutes:Router = Router();
+const userRoutes: Router = Router();
 
-userRoutes.route("/signup").post(Signup);
-
+userRoutes.get("/email", userController.getUserByEmail);
+userRoutes.patch("/me", userController.updateUser);
+userRoutes.delete("/me", userController.deleteUser);
+userRoutes.get("/role", userController.getUserBoardRole);
 
 export default userRoutes;

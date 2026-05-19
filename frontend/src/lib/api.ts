@@ -218,3 +218,36 @@ export async function uploadBoardImage(boardId: string, file: File): Promise<Boa
 
   return json as BoardAsset;
 }
+
+export async function getUserByEmail(email: string) {
+  const res = await fetch(`${apiUrl}/users/email?email=${encodeURIComponent(email)}`, {
+    credentials: "include",
+  });
+
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function updateUser(data: { name?: string }) {
+  const res = await fetch(`${apiUrl}/users/me`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error || "Failed to update profile");
+  return json;
+}
+
+export async function deleteUser() {
+  const res = await fetch(`${apiUrl}/users/me`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error || "Failed to delete account");
+  return json;
+}

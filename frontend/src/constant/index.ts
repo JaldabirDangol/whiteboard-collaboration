@@ -1,1 +1,1 @@
-export const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "https://whiteboard-collaboration-production.up.railway.app/api";
+export const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3050/api";

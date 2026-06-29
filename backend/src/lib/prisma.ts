@@ -7,6 +7,9 @@ const connectionString = process.env.DATABASE_URL!;
 
 const pool = new pg.Pool({
   connectionString,
+  max: 20,
+  idleTimeoutMillis: 60000,
+  connectionTimeoutMillis: 10000,
   ssl:
     connectionString.includes("sslmode=require") || connectionString.includes("sslmode=verify-full")
       ? { rejectUnauthorized: false }
@@ -15,6 +18,10 @@ const pool = new pg.Pool({
         : connectionString.includes("sslmode=no-verify")
           ? { rejectUnauthorized: false }
           : undefined,
+});
+
+pool.on("error", (err) => {
+  console.error("[pool] Unexpected error on idle client:", err.message);
 });
 
 const adapter = new PrismaPg(pool);

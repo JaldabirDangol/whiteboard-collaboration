@@ -14,14 +14,17 @@ import { toast } from "sonner";
 import { logout } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/store/useUserStore";
-import { LogOut, Plus, Search } from "lucide-react";
+import { LogOut, Plus, Search, Loader2 } from "lucide-react";
 
+interface NavbarProps {
+  search?: string;
+  onSearchChange?: (value: string) => void;
+}
 
-const Navbar = () => {
+const Navbar = ({ search = "", onSearchChange }: NavbarProps) => {
   const [title, setTitle] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [open, setOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
   const user = useUserStore((state) => state.user);
   const userInitials = user?.email
@@ -31,40 +34,40 @@ const Navbar = () => {
 
   const queryClient = useQueryClient();
   const createBoard = useMutation({
-  mutationFn: async (data: { title: string; thumbnailUrl: string }) => {
-    const res = await fetch(`${apiUrl}/boards/create`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        ...data,
-        visibility: "private",
-      }),
-    });
+    mutationFn: async (data: { title: string; thumbnailUrl: string }) => {
+      const res = await fetch(`${apiUrl}/boards/create`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          ...data,
+          visibility: "private",
+        }),
+      });
 
-    const json = await res.json();
+      const json = await res.json();
 
-    if (!res.ok) {
-      throw new Error(json.error || "Failed to create board");
-    }
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to create board");
+      }
 
-    return json;
-  },
+      return json;
+    },
 
-  onSuccess: (data) => {
-    queryClient.invalidateQueries({ queryKey: ["boards"] });
-    setOpen(false);
-    setTitle("");
-    setThumbnailUrl("");
-    toast.success("Board created successfully!");
-    router.push(`/boards/${data.id}`);
-  },
-  onError:(err)=>{
-    toast.error(err.message)
-  }
-});
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["boards"] });
+      setOpen(false);
+      setTitle("");
+      setThumbnailUrl("");
+      toast.success("Board created!");
+      router.push(`/boards/${data.id}`);
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
 
   const logoutMutation = useMutation({
     mutationFn: logout,
@@ -81,32 +84,32 @@ const Navbar = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()){
-      toast.error("title is required")
-      return
+    if (!title.trim()) {
+      toast.error("Title is required");
+      return;
     }
     createBoard.mutate({ title, thumbnailUrl });
   };
 
   return (
-    <div className="flex justify-between items-center gap-4 mb-6">
+    <div className="flex items-center justify-between gap-4 pb-4">
       <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         <input
           type="text"
           placeholder="Search boards..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm"
+          value={search}
+          onChange={(e) => onSearchChange?.(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
         />
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
-          <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-medium">
+        <div className="flex items-center gap-2.5 pr-3 py-1.5 pl-1.5 bg-slate-50 rounded-xl border border-slate-200">
+          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium shadow-sm">
             {userInitials}
           </div>
-          <span className="text-sm font-medium text-slate-700 hidden sm:block">
+          <span className="text-sm font-medium text-slate-600 hidden sm:block">
             {user?.email?.split("@")[0]}
           </span>
         </div>
@@ -115,14 +118,14 @@ const Navbar = () => {
           type="button"
           onClick={() => logoutMutation.mutate()}
           disabled={logoutMutation.isPending}
-          className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 disabled:opacity-60"
+          className="flex items-center gap-2 rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-60"
         >
           <LogOut className="h-4 w-4" />
           <span className="hidden sm:inline">Logout</span>
         </button>
 
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger className="flex items-center gap-2 py-2.5 px-4 rounded-xl shadow-sm bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 transition-colors">
+          <DialogTrigger className="flex items-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-medium text-sm hover:from-indigo-500 hover:to-indigo-400 transition-all shadow-md shadow-indigo-500/20">
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Board</span>
           </DialogTrigger>
@@ -162,8 +165,11 @@ const Navbar = () => {
               <button
                 type="submit"
                 disabled={createBoard.isPending}
-                className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium text-sm hover:bg-indigo-700 transition-colors disabled:opacity-60"
+                className="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 text-white py-3 rounded-xl font-medium text-sm hover:from-indigo-500 hover:to-indigo-400 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
               >
+                {createBoard.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
                 {createBoard.isPending ? "Creating..." : "Create Board"}
               </button>
             </form>

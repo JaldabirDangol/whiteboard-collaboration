@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type ToolType = "select" | "pen" | "eraser" | "line" | "rectangle" | "circle" | "ellipse" | "text" | "laser";
+export type ToolType = "select" | "pen" | "eraser" | "line" | "rectangle" | "circle" | "ellipse" | "text" | "laser" | "arrow";
 
 type ToolState = {
   selected: ToolType;

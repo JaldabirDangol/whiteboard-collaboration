@@ -47,14 +47,49 @@ export async function getBoardMember(boardId: string, userId: string) {
   });
 }
 
-export async function getBoardsForUser(userId: string) {
-  return await prisma.board.findMany({
-    where: {
-      members: {
-        some: { userId },
-      },
+export async function getBoardsForUser(
+  userId: string,
+  options?: {
+    filter?: "all" | "starred" | "shared" | "recent";
+    search?: string;
+    sort?: "updatedAt" | "createdAt" | "title";
+    order?: "asc" | "desc";
+  }
+) {
+  const { filter = "all", search, sort = "updatedAt", order = "desc" } = options || {};
+
+  const where: Record<string, unknown> = {
+    members: {
+      some: { userId },
     },
+  };
+
+  if (search) {
+    where.title = { contains: search, mode: "insensitive" };
+  }
+
+  let orderBy: Record<string, string> = {};
+  if (filter === "recent") {
+    orderBy = { updatedAt: order };
+  } else if (filter === "starred") {
+    where.members.some = { userId, isStarred: true };
+    orderBy = { updatedAt: order };
+  } else if (filter === "shared") {
+    where.members = {
+      some: {
+        userId,
+        role: { not: "ADMIN" },
+      },
+    };
+    orderBy = { updatedAt: order };
+  } else {
+    orderBy = { [sort]: order };
+  }
+
+  return await prisma.board.findMany({
+    where,
     include: { members: true },
+    orderBy,
   });
 }
 
@@ -387,5 +422,24 @@ export async function getBoardSnapshots(boardId: string, limit = 20) {
 export async function getBoardSnapshotById(snapshotId: string) {
   return await prisma.snapshot.findUnique({
     where: { id: snapshotId },
+  });
+}
+
+export async function toggleStar(boardId: string, userId: string) {
+  const member = await prisma.boardMember.findUnique({
+    where: {
+      userId_boardId: { userId, boardId },
+    },
+  });
+
+  if (!member) {
+    throw new Error("You are not a member of this board");
+  }
+
+  return await prisma.boardMember.update({
+    where: {
+      userId_boardId: { userId, boardId },
+    },
+    data: { isStarred: !member.isStarred },
   });
 }

@@ -95,17 +95,18 @@ export default function BoardTopBar({
   avatarInitials,
 }: BoardTopBarProps) {
   return (
-    <div className="z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-3 md:px-4">
+    <div className="z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur-sm px-3 md:px-4">
       <div className="flex min-w-0 items-center gap-3">
         <p className="truncate text-sm font-semibold text-slate-900">{boardTitle}</p>
         <span
-          className={`hidden items-center rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide md:inline-flex ${
+          className={`hidden items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide md:inline-flex ${
             isViewOnly
               ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200/70"
               : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/70"
           }`}
           title={isViewOnly ? "You can view but cannot edit this board" : "You can edit this board"}
         >
+          <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 ${isViewOnly ? "bg-amber-500" : "bg-emerald-500"}`} />
           {isViewOnly ? "View only" : "Can edit"}
         </span>
         <div className="hidden items-center gap-4 text-sm md:flex">
@@ -114,10 +115,10 @@ export default function BoardTopBar({
               key={tab}
               type="button"
               onClick={() => onTopTabClick(tab)}
-              className={`pb-1 transition ${
+              className={`pb-1 transition-all ${
                 tab === activeTopTab
                   ? "border-b-2 border-indigo-600 font-medium text-indigo-600"
-                  : "text-slate-500 hover:text-slate-800"
+                  : "text-slate-400 hover:text-slate-600"
               }`}
             >
               {tab}
@@ -126,14 +127,14 @@ export default function BoardTopBar({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <Button type="button" variant="outline" size="sm" className="md:hidden" onClick={onToggleChat}>
           {chatOpen ? <X className="h-4 w-4" /> : <MessageSquareMore className="h-4 w-4" />}
         </Button>
 
         <Dialog open={shareOpen} onOpenChange={onShareOpenChange}>
           <DialogTrigger asChild>
-            <Button type="button" size="sm" className="gap-1.5 bg-indigo-600 text-white hover:bg-indigo-500">
+            <Button type="button" size="sm" className="gap-1.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white hover:from-indigo-500 hover:to-indigo-400 shadow-md shadow-indigo-500/20">
               <Share2 className="h-4 w-4" />
               Share
             </Button>
@@ -152,19 +153,19 @@ export default function BoardTopBar({
                     onChange={(event) => onShareEmailChange(event.target.value)}
                     type="email"
                     placeholder="Search by email..."
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
+                    className="h-10 w-full rounded-xl border border-slate-200 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                   />
                   {userSuggestions.length > 0 && (
-                    <ul className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+                    <ul className="absolute z-50 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
                       {userSuggestions.map((u) => (
                         <li key={u.id}>
                           <button
                             type="button"
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-sm hover:bg-slate-50 transition-colors"
                             onClick={() => onSelectSuggestion(u.email)}
                           >
                             <span className="font-medium text-slate-800">{u.name || u.email.split("@")[0]}</span>
-                            <span className="text-slate-500">{u.email}</span>
+                            <span className="text-slate-400">{u.email}</span>
                           </button>
                         </li>
                       ))}
@@ -174,7 +175,7 @@ export default function BoardTopBar({
                 <select
                   value={shareRole}
                   onChange={(event) => onShareRoleChange(event.target.value as "EDITOR" | "VIEWER")}
-                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-slate-200 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 >
                   <option value="VIEWER">Viewer</option>
                   <option value="EDITOR">Editor</option>
@@ -184,9 +185,9 @@ export default function BoardTopBar({
                 </Button>
               </div>
 
-              <div className="space-y-2 border-t border-slate-200 pt-3">
+              <div className="space-y-2 border-t border-slate-100 pt-3">
                 <p className="text-sm text-slate-600">Share link</p>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 break-all">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 break-all select-all">
                   {shareLink}
                 </div>
                 <Button variant="secondary" className="w-full" onClick={onCopyShareLink}>
@@ -233,7 +234,10 @@ export default function BoardTopBar({
                   Redo
                 </Button>
               </div>
-              <p className="text-xs text-slate-500">Shortcuts: Ctrl/Cmd + Z for undo, Ctrl/Cmd + Y or Ctrl/Cmd + R or Ctrl/Cmd + Shift + Z for redo.</p>
+              <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500 space-y-1">
+                <p><kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono">Ctrl/Cmd + Z</kbd> Undo</p>
+                <p><kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono">Ctrl/Cmd + Shift + Z</kbd> Redo</p>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -242,7 +246,7 @@ export default function BoardTopBar({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="hidden rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 md:inline-flex"
+            className="hidden rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 md:inline-flex"
           >
             <Cog className="h-4 w-4" />
           </button>
@@ -251,16 +255,16 @@ export default function BoardTopBar({
               <DialogTitle>Profile & avatar</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div
-                  className="grid h-12 w-12 place-items-center rounded-full text-sm font-semibold text-white"
+                  className="grid h-14 w-14 place-items-center rounded-full text-lg font-semibold text-white shadow-inner"
                   style={{ backgroundColor: draftAvatarColor }}
                 >
                   {getInitials(draftDisplayName.trim() || userEmail || "Me")}
                 </div>
                 <div>
                   <p className="text-sm font-medium text-slate-800">{draftDisplayName.trim() || userLabel}</p>
-                  <p className="text-xs text-slate-500">{userEmail}</p>
+                  <p className="text-xs text-slate-400">{userEmail}</p>
                 </div>
               </div>
 
@@ -273,7 +277,7 @@ export default function BoardTopBar({
                   value={draftDisplayName}
                   onChange={(event) => onDraftDisplayNameChange(event.target.value)}
                   placeholder="Your name"
-                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-slate-200 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 />
               </div>
 
@@ -285,8 +289,8 @@ export default function BoardTopBar({
                       key={swatch}
                       type="button"
                       onClick={() => onDraftAvatarColorChange(swatch)}
-                      className={`h-8 w-8 rounded-full ring-offset-2 transition ${
-                        draftAvatarColor === swatch ? "ring-2 ring-slate-500" : "ring-1 ring-slate-200"
+                      className={`h-8 w-8 rounded-full ring-offset-2 transition hover:scale-110 ${
+                        draftAvatarColor === swatch ? "ring-2 ring-slate-500 scale-110" : "ring-1 ring-slate-200"
                       }`}
                       style={{ backgroundColor: swatch }}
                       aria-label={`Use avatar color ${swatch}`}
@@ -304,7 +308,7 @@ export default function BoardTopBar({
 
         <Dialog open={helpOpen} onOpenChange={onHelpOpenChange}>
           <DialogTrigger asChild>
-            <button type="button" className="hidden rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 md:inline-flex">
+            <button type="button" className="hidden rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 md:inline-flex">
               <HelpCircle className="h-4 w-4" />
             </button>
           </DialogTrigger>
@@ -312,19 +316,33 @@ export default function BoardTopBar({
             <DialogHeader>
               <DialogTitle>Canvas shortcuts</DialogTitle>
             </DialogHeader>
-            <ul className="space-y-2 text-sm text-slate-600">
-              <li>Hold Space and drag to pan.</li>
-              <li>Ctrl/Cmd + wheel to zoom.</li>
-              <li>Ctrl/Cmd + Z to undo.</li>
-              <li>Ctrl/Cmd + Y or Ctrl/Cmd + R or Ctrl/Cmd + Shift + Z to redo.</li>
-            </ul>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <ul className="space-y-2.5 text-sm text-slate-600">
+                <li className="flex items-center gap-2">
+                  <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono min-w-[8rem] text-center">Space + Drag</kbd>
+                  Pan canvas
+                </li>
+                <li className="flex items-center gap-2">
+                  <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono min-w-[8rem] text-center">Ctrl/Cmd + Wheel</kbd>
+                  Zoom
+                </li>
+                <li className="flex items-center gap-2">
+                  <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono min-w-[8rem] text-center">Ctrl/Cmd + Z</kbd>
+                  Undo
+                </li>
+                <li className="flex items-center gap-2">
+                  <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono min-w-[8rem] text-center">Ctrl/Cmd + Shift + Z</kbd>
+                  Redo
+                </li>
+              </ul>
+            </div>
           </DialogContent>
         </Dialog>
 
         <button
           type="button"
           onClick={onOpenSettings}
-          className="hidden h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white md:flex"
+          className="hidden h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white shadow-sm md:flex hover:opacity-90 transition-opacity"
           style={{ backgroundColor: avatarColor }}
           title={userLabel}
         >

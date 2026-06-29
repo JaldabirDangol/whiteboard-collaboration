@@ -15,6 +15,8 @@ boardRoutes.post("/:id/share", boardController.shareBoard);
 boardRoutes.get("/:id", boardController.getBoard);
 boardRoutes.put("/:id", boardController.updateBoardMember);
 boardRoutes.delete("/:id", boardController.deleteBoard);
+boardRoutes.patch("/:id/star", boardController.toggleStar);
+boardRoutes.delete("/:id/members/:userId", boardController.removeMember);
 
 // Board Object CRUD — RBAC-protected
 boardRoutes.post("/:id/objects", checkBoardAccess("EDITOR"), objectController.createObject);

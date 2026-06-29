@@ -52,11 +52,17 @@ export async function getBoard(req: Request, res: Response) {
 
 export async function getBoardsForUser(req: Request, res: Response) {
   try {
-   
-  const userId = req.user?.id;
+    const userId = req.user?.id;
     if (!userId) return res.status(400).json({ error: "User ID is required" });
 
-    const boards = await boardService.getBoardsForUser(userId);
+    const { filter, search, sort, order } = req.query as {
+      filter?: "all" | "starred" | "shared" | "recent";
+      search?: string;
+      sort?: "updatedAt" | "createdAt" | "title";
+      order?: "asc" | "desc";
+    };
+
+    const boards = await boardService.getBoardsForUser(userId, { filter, search, sort, order });
     return res.json(boards);
   } catch (error) {
     return res.status(400).json({ error: (error as Error).message });
@@ -194,6 +200,51 @@ export async function deleteBoard(req: Request, res: Response) {
       message: "Board deleted successfully",
       boardTitle: board.title,
     });
+  } catch (error) {
+    return res.status(400).json({ error: (error as Error).message });
+  }
+}
+
+export async function toggleStar(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    if (!id) return res.status(400).json({ error: "Board ID is required" });
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const membership = await boardService.getBoardMember(id as string, userId);
+    if (!membership) {
+      return res.status(403).json({ error: "You do not have access to this board" });
+    }
+
+    const updated = await boardService.toggleStar(id as string, userId);
+    return res.json({ isStarred: updated.isStarred });
+  } catch (error) {
+    return res.status(400).json({ error: (error as Error).message });
+  }
+}
+
+export async function removeMember(req: Request, res: Response) {
+  try {
+    const { id: boardId, userId: targetUserId } = req.params;
+    const actorUserId = req.user?.id;
+
+    if (!boardId) return res.status(400).json({ error: "Board ID is required" });
+    if (!targetUserId) return res.status(400).json({ error: "User ID is required" });
+    if (!actorUserId) return res.status(401).json({ error: "Unauthorized" });
+
+    const actorMembership = await boardService.getBoardMember(boardId, actorUserId);
+    if (!actorMembership || actorMembership.role !== "ADMIN") {
+      return res.status(403).json({ error: "Only board admins can remove members" });
+    }
+
+    if (targetUserId === actorUserId) {
+      return res.status(400).json({ error: "You cannot remove yourself" });
+    }
+
+    await boardService.removeMember(boardId, targetUserId);
+    return res.json({ message: "Member removed successfully" });
   } catch (error) {
     return res.status(400).json({ error: (error as Error).message });
   }

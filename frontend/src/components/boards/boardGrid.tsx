@@ -1,7 +1,7 @@
 "use client";
 
 import { BoardCard } from "./boardCard";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { useState } from "react";
 import {
   Dialog,
@@ -15,7 +15,15 @@ import { apiUrl } from "@/constant";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
-export const BoardGrid = ({ boards }: { boards: any[] }) => {
+import type { BoardWithMembers } from "@/lib/api";
+
+interface BoardGridProps {
+  boards: BoardWithMembers[];
+  onToggleStar?: (boardId: string) => void;
+  isStarred?: (board: BoardWithMembers) => boolean;
+}
+
+export const BoardGrid = ({ boards, onToggleStar, isStarred }: BoardGridProps) => {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const router = useRouter();
@@ -54,8 +62,8 @@ export const BoardGrid = ({ boards }: { boards: any[] }) => {
 
   if (!boards.length) {
     return (
-      <div className="flex flex-col items-center justify-center mt-32 text-center">
-        <div className="h-24 w-24 rounded-3xl bg-indigo-50 flex items-center justify-center mb-6">
+      <div className="flex flex-col items-center justify-center mt-24 text-center">
+        <div className="h-24 w-24 rounded-3xl bg-gradient-to-br from-indigo-100 to-indigo-50 flex items-center justify-center mb-6 shadow-inner">
           <span className="text-4xl">📋</span>
         </div>
 
@@ -63,13 +71,13 @@ export const BoardGrid = ({ boards }: { boards: any[] }) => {
           No boards yet
         </h2>
 
-        <p className="text-slate-500 mb-8 max-w-sm">
+        <p className="text-slate-500 mb-8 max-w-sm leading-relaxed">
           Create your first board to start collaborating, sketching ideas,
           and organizing your work.
         </p>
 
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/25">
+          <DialogTrigger className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl font-medium hover:from-indigo-500 hover:to-indigo-400 transition-all shadow-lg shadow-indigo-600/25">
             <Plus className="h-5 w-5" />
             Create Board
           </DialogTrigger>
@@ -90,8 +98,11 @@ export const BoardGrid = ({ boards }: { boards: any[] }) => {
               <button
                 type="submit"
                 disabled={createBoard.isPending}
-                className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60"
+                className="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 text-white py-3 rounded-xl font-medium hover:from-indigo-500 hover:to-indigo-400 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
               >
+                {createBoard.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
                 {createBoard.isPending ? "Creating..." : "Create Board"}
               </button>
             </form>
@@ -103,9 +114,8 @@ export const BoardGrid = ({ boards }: { boards: any[] }) => {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-      {/* Create new board card */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger className="flex flex-col items-center justify-center h-40 rounded-2xl border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all cursor-pointer group">
+        <DialogTrigger className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all cursor-pointer group min-h-[13rem]">
           <div className="h-12 w-12 rounded-xl bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center mb-3 transition-colors">
             <Plus className="h-6 w-6 text-slate-400 group-hover:text-indigo-600" />
           </div>
@@ -130,16 +140,24 @@ export const BoardGrid = ({ boards }: { boards: any[] }) => {
             <button
               type="submit"
               disabled={createBoard.isPending}
-              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60"
+              className="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 text-white py-3 rounded-xl font-medium hover:from-indigo-500 hover:to-indigo-400 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
             >
+              {createBoard.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
               {createBoard.isPending ? "Creating..." : "Create Board"}
             </button>
           </form>
         </DialogContent>
       </Dialog>
 
-      {boards.map((board: any) => (
-        <BoardCard key={board.id} board={board} />
+      {boards.map((board) => (
+        <BoardCard
+          key={board.id}
+          board={board}
+          onToggleStar={onToggleStar}
+          isStarred={isStarred?.(board) ?? false}
+        />
       ))}
     </div>
   );

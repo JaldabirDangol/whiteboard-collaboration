@@ -2,9 +2,17 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
-import { Clock, MoreHorizontal } from "lucide-react";
+import { Clock, MoreHorizontal, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { BoardWithMembers } from "@/lib/api";
 
-export const BoardCard = ({ board }: { board: any }) => {
+interface BoardCardProps {
+  board: BoardWithMembers;
+  onToggleStar?: (boardId: string) => void;
+  isStarred?: boolean;
+}
+
+export const BoardCard = ({ board, onToggleStar, isStarred = false }: BoardCardProps) => {
   const isValidUrl = board?.thumbnailUrl?.startsWith("/") || board?.thumbnailUrl?.startsWith("http");
   const [imgSrc, setImgSrc] = useState(isValidUrl ? board.thumbnailUrl : null);
 
@@ -31,10 +39,9 @@ export const BoardCard = ({ board }: { board: any }) => {
   return (
     <Link
       href={`/boards/${board.id}`}
-      className="group relative flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-indigo-200 transition-all duration-200 cursor-pointer"
+      className="group relative flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-indigo-200 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
     >
-      {/* Thumbnail Container */}
-      <div className="relative h-40 w-full bg-linear-to-br from-slate-50 to-slate-100">
+      <div className="relative h-40 w-full bg-gradient-to-br from-slate-50 to-slate-100">
         {imgSrc ? (
           <Image
             src={imgSrc}
@@ -46,31 +53,48 @@ export const BoardCard = ({ board }: { board: any }) => {
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="h-16 w-16 rounded-2xl bg-indigo-100 flex items-center justify-center mb-2">
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-indigo-50 flex items-center justify-center mb-2 shadow-inner">
               <span className="text-2xl">🎨</span>
             </div>
             <span className="text-xs font-medium text-slate-400">No Preview</span>
           </div>
         )}
 
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-indigo-600/0 group-hover:bg-indigo-600/5 transition-colors" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/[0.02] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-        {/* Menu button */}
+        {onToggleStar && (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              onToggleStar(board.id);
+            }}
+            className={cn(
+              "absolute top-3 left-3 p-1.5 rounded-lg bg-white/90 shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-white",
+              isStarred && "opacity-100"
+            )}
+          >
+            <Star
+              className={cn(
+                "h-4 w-4",
+                isStarred ? "fill-amber-400 text-amber-400" : "text-slate-500"
+              )}
+            />
+          </button>
+        )}
+
         <button
-          className="absolute top-3 right-3 p-1.5 rounded-lg bg-white/80 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+          className="absolute top-3 right-3 p-1.5 rounded-lg bg-white/90 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
           onClick={(e) => e.preventDefault()}
         >
-          <MoreHorizontal className="h-4 w-4 text-slate-600" />
+          <MoreHorizontal className="h-4 w-4 text-slate-500" />
         </button>
       </div>
 
-      {/* Content */}
       <div className="p-4">
-        <h3 className="font-semibold text-slate-800 truncate mb-2 group-hover:text-indigo-600 transition-colors">
+        <h3 className="font-semibold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">
           {board.title}
         </h3>
-        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+        <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1.5">
           <Clock className="h-3 w-3" />
           <span>{formatDate(board.updatedAt)}</span>
         </div>

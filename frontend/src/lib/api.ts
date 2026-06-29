@@ -251,3 +251,131 @@ export async function deleteUser() {
   if (!res.ok) throw new Error(json?.error || "Failed to delete account");
   return json;
 }
+
+export type BoardWithMembers = {
+  id: string;
+  title: string;
+  thumbnailUrl: string | null;
+  currentSnapshotVersion: number | null;
+  createdAt: string;
+  updatedAt: string;
+  members: {
+    id: string;
+    userId: string;
+    boardId: string;
+    role: "ADMIN" | "EDITOR" | "VIEWER";
+    isStarred: boolean;
+  }[];
+};
+
+export type GetBoardsParams = {
+  filter?: "all" | "starred" | "shared" | "recent";
+  search?: string;
+  sort?: "updatedAt" | "createdAt" | "title";
+  order?: "asc" | "desc";
+};
+
+export async function getBoards(params?: GetBoardsParams): Promise<BoardWithMembers[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.filter) searchParams.set("filter", params.filter);
+  if (params?.search) searchParams.set("search", params.search);
+  if (params?.sort) searchParams.set("sort", params.sort);
+  if (params?.order) searchParams.set("order", params.order);
+
+  const query = searchParams.toString();
+  const res = await fetch(`${apiUrl}/boards/user${query ? `?${query}` : ""}`, {
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to load boards");
+  }
+
+  return res.json();
+}
+
+export async function toggleStarBoard(boardId: string): Promise<{ isStarred: boolean }> {
+  const res = await fetch(`${apiUrl}/boards/${boardId}/star`, {
+    method: "PATCH",
+    credentials: "include",
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Failed to toggle star");
+  }
+
+  return json;
+}
+
+export type BoardSettings = {
+  boardId: string;
+  isPublic: boolean;
+  password: string | null;
+};
+
+export async function getBoardSettings(boardId: string): Promise<BoardSettings> {
+  const res = await fetch(`${apiUrl}/boards/${boardId}/settings`, {
+    credentials: "include",
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Failed to load settings");
+  }
+
+  return json;
+}
+
+export async function updateBoardSettings(
+  boardId: string, 
+  data: { isPublic?: boolean; password?: string | null }
+): Promise<BoardSettings> {
+  const res = await fetch(`${apiUrl}/boards/${boardId}/settings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Failed to update settings");
+  }
+
+  return json;
+}
+
+export async function updateBoardMemberRole(
+  boardId: string, 
+  userId: string, 
+  role: "ADMIN" | "EDITOR" | "VIEWER"
+): Promise<{ message: string; member: BoardMemberWithUser }> {
+  const res = await fetch(`${apiUrl}/boards/${boardId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ userId, role }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Failed to update member role");
+  }
+
+  return json;
+}
+
+export async function removeBoardMember(boardId: string, userId: string): Promise<{ message: string }> {
+  const res = await fetch(`${apiUrl}/boards/${boardId}/member/${userId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Failed to remove member");
+  }
+
+  return json;
+}

@@ -567,12 +567,17 @@ export default function Page() {
 
       <div className="relative flex min-h-0 flex-1">
         <aside className="hidden w-20 border-r border-slate-200 bg-linear-to-b from-white via-white to-slate-50 px-2 py-3 md:flex md:items-start md:justify-center">
-          <Header layout="vertical" disabled={mounted && !canEditBoard} />
+          <Header 
+            layout="vertical" 
+            disabled={mounted && !canEditBoard}
+          />
         </aside>
 
         <main ref={boardWrapRef} className="relative min-w-0 flex-1 bg-[radial-gradient(circle_at_1px_1px,#dbe4ef_1px,transparent_1.3px)] bg-size-[20px_20px]">
           <div className="absolute left-2 top-2 z-20 md:hidden">
-            <Header disabled={mounted && !canEditBoard} />
+            <Header 
+              disabled={mounted && !canEditBoard}
+            />
           </div>
 
           <Stage

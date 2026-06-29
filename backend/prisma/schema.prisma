@@ -42,9 +42,10 @@ model Board {
 model BoardMember {
   id String @id @default(uuid())
 
-  userId  String
-  boardId String
-  role    Role
+  userId    String
+  boardId   String
+  role      Role
+  isStarred Boolean @default(false)
 
   user  User  @relation(fields: [userId], references: [id])
   board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)

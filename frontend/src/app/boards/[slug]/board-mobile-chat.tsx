@@ -11,14 +11,14 @@ export default function BoardMobileChat({ boardId, currentUserId, chatOpen, onCl
   return (
     <>
       <div
-        className={`absolute inset-0 z-20 bg-slate-900/25 transition-opacity duration-200 lg:hidden ${
+        className={`absolute inset-0 z-20 bg-slate-900/30 backdrop-blur-sm transition-opacity duration-200 lg:hidden ${
           chatOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={onClose}
       />
 
       <div
-        className={`absolute inset-y-0 right-0 z-30 w-[min(22rem,92vw)] border-l border-slate-200 bg-white transition-transform duration-200 lg:hidden ${
+        className={`absolute inset-y-0 right-0 z-30 w-[min(22rem,92vw)] border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out lg:hidden ${
           chatOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >

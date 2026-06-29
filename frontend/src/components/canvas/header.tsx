@@ -2,7 +2,7 @@
 
 import { useToolStore, ToolType } from "@/store/useToolStore";
 import { ComponentType, SVGProps } from "react";
-import { Circle, Eraser, LassoSelect, Minus, Pen, Plus, RectangleEllipsis, Zap, Palette, Undo, Redo } from "lucide-react";
+import { Circle, Eraser, LassoSelect, Minus, Pen, Plus, RectangleEllipsis, Type, Zap, Palette, Undo, Redo } from "lucide-react";
 
 type Tool = {
   tool: ToolType;
@@ -26,6 +26,7 @@ const tools: Tool[] = [
   { tool: "laser", icon: Zap, label: "Laser" },
   { tool: "rectangle", icon: RectangleEllipsis, label: "Rectangle" },
   { tool: "circle", icon: Circle, label: "Circle" },
+  { tool: "text", icon: Type, label: "Text" },
 ];
 
 const ColorPresets = [

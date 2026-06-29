@@ -1,6 +1,7 @@
 import type { KonvaEventObject } from "konva/lib/Node";
 import { useEffect, useRef, useState } from "react";
 import type { ToolType } from "@/store/useToolStore";
+import { useToolStore } from "@/store/useToolStore";
 import type { BoardShape, LaserStroke, RectShape } from "./board-types";
 import { newShapeId } from "./board-shape-utils";
 
@@ -18,6 +19,7 @@ type UseBoardCanvasInteractionsArgs = {
   updateShapesLocally: (updater: (prev: BoardShape[]) => BoardShape[]) => void;
   emitCursorMove: (position: { x: number; y: number }) => void;
   setLaserStrokes: React.Dispatch<React.SetStateAction<LaserStroke[]>>;
+  onTextCreated?: (shapeId: string, shapeData: { x: number; y: number; fontSize: number; fontFamily: string; color: string }) => void;
 };
 
 export const useBoardCanvasInteractions = ({
@@ -28,6 +30,7 @@ export const useBoardCanvasInteractions = ({
   updateShapesLocally,
   emitCursorMove,
   setLaserStrokes,
+  onTextCreated,
 }: UseBoardCanvasInteractionsArgs) => {
   const [zoom, setZoom] = useState(1);
   const [viewport, setViewport] = useState({ x: 0, y: 0 });
@@ -35,6 +38,9 @@ export const useBoardCanvasInteractions = ({
   const isDrawing = useRef(false);
   const isPanning = useRef(false);
   const isSpacePressed = useRef(false);
+  const selectedToolRef = useRef(selectedTool);
+  const colorRef = useRef(color);
+  const strokeWidthRef = useRef(strokeWidth);
   const panStart = useRef({ x: 0, y: 0 });
   const viewportStart = useRef({ x: 0, y: 0 });
   const draftShapeId = useRef<string | null>(null);
@@ -42,8 +48,17 @@ export const useBoardCanvasInteractions = ({
   const laserTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const lastDrawPoint = useRef<{ x: number; y: number } | null>(null);
 
-  const canDraw = selectedTool !== "select";
-  const isLaser = selectedTool === "laser";
+  useEffect(() => {
+    selectedToolRef.current = selectedTool;
+  }, [selectedTool]);
+
+  useEffect(() => {
+    colorRef.current = color;
+  }, [color]);
+
+  useEffect(() => {
+    strokeWidthRef.current = strokeWidth;
+  }, [strokeWidth]);
 
   const clampZoom = (value: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
 
@@ -97,6 +112,7 @@ export const useBoardCanvasInteractions = ({
   }, []);
 
   const handlePointerDown = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    const currentTool = useToolStore.getState().selected;
     const stage = e.target.getStage();
     const screenPointer = stage?.getPointerPosition();
     const isMiddleMouse = "button" in e.evt && e.evt.button === 1;
@@ -109,17 +125,46 @@ export const useBoardCanvasInteractions = ({
       return;
     }
 
-    if (!canDraw) return;
+    if (currentTool === "select") return;
 
     const pointer = getWorldPointer(e);
     if (!pointer) return;
+
+    if (currentTool === "text") {
+      const id = newShapeId();
+      const fontSize = 16;
+
+      setShapes((prev) => [
+        ...prev,
+        {
+          id,
+          type: "text",
+          x: pointer.x,
+          y: pointer.y,
+          text: "",
+          fontSize,
+          fontFamily: "Arial",
+          color: colorRef.current,
+          strokeWidth: 1,
+        },
+      ]);
+
+      onTextCreated?.(id, {
+        x: pointer.x,
+        y: pointer.y,
+        fontSize,
+        fontFamily: "Arial",
+        color: colorRef.current,
+      });
+      return;
+    }
 
     isDrawing.current = true;
     const id = newShapeId();
     draftShapeId.current = id;
     lastDrawPoint.current = pointer;
 
-    if (isLaser) {
+    if (currentTool === "laser") {
       laserDraftId.current = id;
       setLaserStrokes((prev) => [
         ...prev,
@@ -127,7 +172,7 @@ export const useBoardCanvasInteractions = ({
           id,
           points: [pointer.x, pointer.y],
           color: LASER_COLOR,
-          strokeWidth,
+          strokeWidth: strokeWidthRef.current,
           createdAt: Date.now(),
         },
       ]);
@@ -135,21 +180,21 @@ export const useBoardCanvasInteractions = ({
     }
 
     setShapes((prev) => {
-      if (selectedTool === "pen" || selectedTool === "eraser") {
+      if (currentTool === "pen" || currentTool === "eraser") {
         return [
           ...prev,
           {
             id,
             type: "line",
-            tool: selectedTool,
+            tool: currentTool as "pen" | "eraser",
             points: [pointer.x, pointer.y],
-            color,
-            strokeWidth,
+            color: colorRef.current,
+            strokeWidth: strokeWidthRef.current,
           },
         ];
       }
 
-      if (selectedTool === "line") {
+      if (currentTool === "line") {
         return [
           ...prev,
           {
@@ -157,13 +202,13 @@ export const useBoardCanvasInteractions = ({
             type: "line",
             tool: "line",
             points: [pointer.x, pointer.y],
-            color,
-            strokeWidth,
+            color: colorRef.current,
+            strokeWidth: strokeWidthRef.current,
           },
         ];
       }
 
-      if (selectedTool === "rectangle") {
+      if (currentTool === "rectangle") {
         return [
           ...prev,
           {
@@ -173,13 +218,13 @@ export const useBoardCanvasInteractions = ({
             y: pointer.y,
             width: 0,
             height: 0,
-            color,
-            strokeWidth,
+            color: colorRef.current,
+            strokeWidth: strokeWidthRef.current,
           },
         ];
       }
 
-      if (selectedTool === "circle") {
+      if (currentTool === "circle") {
         return [
           ...prev,
           {
@@ -188,13 +233,13 @@ export const useBoardCanvasInteractions = ({
             x: pointer.x,
             y: pointer.y,
             radius: 0,
-            color,
-            strokeWidth,
+            color: colorRef.current,
+            strokeWidth: strokeWidthRef.current,
           },
         ];
       }
 
-      if (selectedTool === "ellipse") {
+      if (currentTool === "ellipse") {
         return [
           ...prev,
           {
@@ -204,26 +249,8 @@ export const useBoardCanvasInteractions = ({
             y: pointer.y,
             radiusX: 0,
             radiusY: 0,
-            color,
-            strokeWidth,
-          },
-        ];
-      }
-
-      if (selectedTool === "text") {
-        // For text, we'll create it immediately - text input handled separately
-        return [
-          ...prev,
-          {
-            id,
-            type: "text",
-            x: pointer.x,
-            y: pointer.y,
-            text: "Click to edit",
-            fontSize: 16,
-            fontFamily: "Arial",
-            color,
-            strokeWidth: 1,
+            color: colorRef.current,
+            strokeWidth: strokeWidthRef.current,
           },
         ];
       }
@@ -233,6 +260,7 @@ export const useBoardCanvasInteractions = ({
   };
 
   const handlePointerMove = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    const currentTool = useToolStore.getState().selected;
     const stage = e.target.getStage();
     const screenPointer = stage?.getPointerPosition();
 
@@ -251,7 +279,7 @@ export const useBoardCanvasInteractions = ({
       emitCursorMove({ x: pointer.x, y: pointer.y });
     }
 
-    if (!isDrawing.current || !canDraw) return;
+    if (!isDrawing.current) return;
     if (!pointer) return;
     const targetId = draftShapeId.current;
     if (!targetId) return;
@@ -263,7 +291,7 @@ export const useBoardCanvasInteractions = ({
     }
     lastDrawPoint.current = pointer;
 
-    if (isLaser && laserDraftId.current === targetId) {
+    if (currentTool === "laser" && laserDraftId.current === targetId) {
       setLaserStrokes((prev) =>
         prev.map((stroke) =>
           stroke.id === targetId
@@ -346,6 +374,7 @@ export const useBoardCanvasInteractions = ({
   };
 
   const handlePointerUp = () => {
+    const currentTool = useToolStore.getState().selected;
     if (isPanning.current) {
       isPanning.current = false;
       return;
@@ -359,7 +388,7 @@ export const useBoardCanvasInteractions = ({
     laserDraftId.current = null;
     lastDrawPoint.current = null;
 
-    if (isLaser && laserId) {
+    if (currentTool === "laser" && laserId) {
       const timer = window.setTimeout(() => {
         setLaserStrokes((prev) => prev.filter((stroke) => stroke.id !== laserId));
         laserTimers.current.delete(laserId);

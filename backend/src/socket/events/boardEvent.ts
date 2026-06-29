@@ -1,6 +1,7 @@
 import { Server, Socket } from "socket.io";
 import * as Y from "yjs";
-import { getYDoc } from "@/socket/yjs.js" // Path to the file above
+import { getYDoc } from "@/socket/yjs.js"
+import { logAction } from "@/lib/auditLog.js";
 import {
   getBoardShapesFromDatabase,
   getBoardCurrentSnapshotVersion,
@@ -260,6 +261,19 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         objectId,
       });
 
+      await logAction({
+        boardId,
+        userId,
+        action: "object.created",
+        metadata: { objectId, type },
+      });
+
+      io.to(boardId).emit("board:activity", {
+        action: "object.created",
+        userId,
+        metadata: { objectId, type },
+      });
+
       debouncedPersist(boardId, doc, userId);
     } catch (error) {
       console.error("[board:draw]", error);
@@ -300,6 +314,19 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         objectId,
       });
 
+      await logAction({
+        boardId,
+        userId: socket.data.user?.id ?? "system",
+        action: "object.updated",
+        metadata: { objectId },
+      });
+
+      io.to(boardId).emit("board:activity", {
+        action: "object.updated",
+        userId: socket.data.user?.id,
+        metadata: { objectId },
+      });
+
       debouncedPersist(boardId, doc, socket.data.user?.id);
     } catch (error) {
       console.error("[board:update-object]", error);
@@ -333,6 +360,19 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         boardId,
         action: "delete",
         objectId,
+      });
+
+      await logAction({
+        boardId,
+        userId: socket.data.user?.id ?? "system",
+        action: "object.deleted",
+        metadata: { objectId },
+      });
+
+      io.to(boardId).emit("board:activity", {
+        action: "object.deleted",
+        userId: socket.data.user?.id,
+        metadata: { objectId },
       });
 
       debouncedPersist(boardId, doc, socket.data.user?.id);

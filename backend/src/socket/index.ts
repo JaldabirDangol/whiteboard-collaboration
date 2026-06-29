@@ -4,6 +4,7 @@ import { Server as HttpServer } from "http"
 import { registerBoardEvents } from "@/socket/events/boardEvent.js"
 import { registerPresenceEvents } from "@/socket/events/presenceEvents.js"
 import { registerChatEvents } from "@/socket/events/chatEvents.js"
+import { registerCommentEvents } from "@/socket/events/commentEvents.js"
 import { socketAuth } from "@/socket/middleware/socketAuth.js"
 
 
@@ -25,6 +26,7 @@ export const initSocket = (server: HttpServer) => {
     registerBoardEvents(io, socket)
     registerPresenceEvents(io, socket)
     registerChatEvents(io, socket)
+    registerCommentEvents(io, socket)
   })
 
   return io

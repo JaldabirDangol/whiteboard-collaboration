@@ -23,3 +23,20 @@ export async function getLogsForBoard(boardId: string, limit = 50) {
     take: limit,
   });
 }
+
+export async function getLogsForBoardWithUsers(boardId: string, limit = 50) {
+  return await prisma.auditLog.findMany({
+    where: { boardId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+}

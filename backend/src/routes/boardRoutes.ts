@@ -31,7 +31,7 @@ boardRoutes.get("/:id/snapshots/:snapshotId", checkBoardAccess("VIEWER"), object
 boardRoutes.get("/:id/settings", checkBoardAccess("VIEWER"), settingsController.getSettings);
 boardRoutes.patch("/:id/settings", checkBoardAccess("ADMIN"), settingsController.updateSettings);
 
-// Audit Logs (admin only)
-boardRoutes.get("/:id/logs", getBoardLogs);
+// Audit Logs (any member)
+boardRoutes.get("/:id/logs", checkBoardAccess("VIEWER"), getBoardLogs);
 
 export default boardRoutes;

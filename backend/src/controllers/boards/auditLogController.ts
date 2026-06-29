@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { getLogsForBoard } from "@/lib/auditLog.js";
+import { getLogsForBoardWithUsers } from "@/lib/auditLog.js";
 import { getBoardMember } from "@/controllers/boards/boardServices.js";
 
 export async function getBoardLogs(req: Request, res: Response) {
@@ -11,11 +11,11 @@ export async function getBoardLogs(req: Request, res: Response) {
     if (!boardId) return res.status(400).json({ error: "Board ID is required" });
 
     const membership = await getBoardMember(boardId, userId);
-    if (!membership || membership.role !== "ADMIN") {
-      return res.status(403).json({ error: "Only board admins can view audit logs" });
+    if (!membership) {
+      return res.status(403).json({ error: "You do not have access to this board" });
     }
 
-    const logs = await getLogsForBoard(boardId);
+    const logs = await getLogsForBoardWithUsers(boardId);
     return res.json(logs);
   } catch (error) {
     return res.status(500).json({ error: (error as Error).message });

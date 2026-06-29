@@ -380,6 +380,123 @@ export async function deleteBoard(boardId: string): Promise<{ message: string }>
   return json;
 }
 
+// ── Comments ──
+
+export type BoardComment = {
+  id: string;
+  boardId: string;
+  shapeId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  user?: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+};
+
+export async function getShapeComments(shapeId: string): Promise<BoardComment[]> {
+  const res = await fetch(`${apiUrl}/comments/shape/${shapeId}`, {
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to load comments");
+  }
+
+  return res.json();
+}
+
+export async function getBoardComments(boardId: string): Promise<BoardComment[]> {
+  const res = await fetch(`${apiUrl}/comments/board/${boardId}`, {
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to load comments");
+  }
+
+  return res.json();
+}
+
+export async function createComment(
+  boardId: string,
+  shapeId: string,
+  content: string
+): Promise<BoardComment> {
+  const res = await fetch(`${apiUrl}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ boardId, shapeId, content }),
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to create comment");
+  }
+
+  const data = await res.json();
+  return data.data;
+}
+
+export async function getCommentCountsByBoard(boardId: string): Promise<Record<string, number>> {
+  const res = await fetch(`${apiUrl}/comments/board/${boardId}/counts`, {
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to load comment counts");
+  }
+
+  return res.json();
+}
+
+export async function deleteComment(
+  commentId: string,
+  boardId: string,
+  shapeId: string
+): Promise<void> {
+  const res = await fetch(
+    `${apiUrl}/comments/${commentId}?boardId=${encodeURIComponent(boardId)}&shapeId=${encodeURIComponent(shapeId)}`,
+    { method: "DELETE", credentials: "include" }
+  );
+
+  if (!res.ok) {
+    throw new Error("Failed to delete comment");
+  }
+}
+
+// ── Activity / Audit Logs ──
+
+export type BoardActivity = {
+  id: string;
+  boardId: string;
+  userId: string;
+  action: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  user?: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+};
+
+export async function getBoardActivity(boardId: string): Promise<BoardActivity[]> {
+  const res = await fetch(`${apiUrl}/boards/${boardId}/logs`, {
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to load activity");
+  }
+
+  return res.json();
+}
+
 export async function removeBoardMember(boardId: string, userId: string): Promise<{ message: string }> {
   const res = await fetch(`${apiUrl}/boards/${boardId}/member/${userId}`, {
     method: "DELETE",

@@ -9,6 +9,7 @@ import { connectDB, prisma } from "./lib/prisma.js";
 import messageRoutes from "./routes/messageRoute.js";
 import boardRoutes from "./routes/boardRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
+import commentRoutes from "./routes/commentRoutes.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
 import authRoutes from "./routes/authRoutes.js";
 import { initSocket } from "@/socket/index.js";
@@ -69,6 +70,7 @@ app.use("/api/users",authMiddleware, userRoutes);
 app.use("/api/boards", authMiddleware, boardRoutes);
 app.use("/api/messages", authMiddleware, messageRoutes);
 app.use("/api/upload", authMiddleware, uploadRoutes);
+app.use("/api/comments", authMiddleware, commentRoutes);
 
 app.get("/", (req, res) => {
   res.send("Hello World!");

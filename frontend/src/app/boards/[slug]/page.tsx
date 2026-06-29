@@ -2,8 +2,8 @@
 
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { KonvaEventObject } from "konva/lib/Node";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text } from "react-konva";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import { Minus, Plus } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
@@ -11,9 +11,9 @@ import Header from "@/components/canvas/header";
 import { useUserStore } from "@/store/useUserStore";
 import { useToolStore } from "@/store/useToolStore";
 import { apiUrl } from "@/constant";
-import { getBoardDetails, getPersistedBoardShapes, joinBoard, shareBoard, uploadBoardImage, getUserByEmail } from "@/lib/api";
+import { getBoardDetails, getPersistedBoardShapes, joinBoard, shareBoard, uploadBoardImage, getUserByEmail, getCommentCountsByBoard } from "@/lib/api";
 import { toast } from "sonner";
-import type { ImageShape, LaserStroke, RectShape } from "./board-types";
+import type { BoardShape, ImageShape, LaserStroke, RectShape } from "./board-types";
 import { newShapeId, normalizeShapesForClient } from "./board-shape-utils";
 import { AVATAR_COLORS, getInitials, getStoredProfile } from "./board-profile-utils";
 import BoardTopBar from "./board-top-bar";
@@ -37,10 +37,18 @@ export default function Page() {
   const boardWrapRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const stageRef = useRef<KonvaStage | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const shapeRefs = useRef<Map<string, any>>(new Map());
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const transformerRef = useRef<any>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [stageSize, setStageSize] = useState({ width: 1, height: 1 });
   const [mounted, setMounted] = useState(false);
   const [selectedShapeIds, setSelectedShapeIds] = useState<Set<string>>(new Set());
+  const selectedShapeIdsRef = useRef(selectedShapeIds);
+  selectedShapeIdsRef.current = selectedShapeIds;
+  const commentTargetShapeId = selectedShapeIds.size === 1 ? Array.from(selectedShapeIds)[0] : null;
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -54,6 +62,7 @@ export default function Page() {
   const [draftDisplayName, setDraftDisplayName] = useState("");
   const [draftAvatarColor, setDraftAvatarColor] = useState(AVATAR_COLORS[0]);
   const [laserStrokes, setLaserStrokes] = useState<LaserStroke[]>([]);
+const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [userSuggestions, setUserSuggestions] = useState<{ id: string; email: string; name?: string | null }[]>([]);
 
   const { data: boardDetails } = useQuery({
@@ -66,6 +75,13 @@ export default function Page() {
     queryKey: ["board-shapes", id],
     queryFn: () => getPersistedBoardShapes(id),
     enabled: Boolean(id && user),
+  });
+
+  const { data: commentCounts } = useQuery({
+    queryKey: ["comment-counts", id],
+    queryFn: () => getCommentCountsByBoard(id),
+    enabled: Boolean(id && user),
+    refetchInterval: 15000,
   });
 
   const {
@@ -89,6 +105,12 @@ export default function Page() {
     [boardDetails?.members, user?.id]
   );
   const canEditBoard = (currentMembership?.role === "ADMIN" || currentMembership?.role === "EDITOR") && !serverReadOnly;
+  const shapesRef = useRef(shapes);
+  shapesRef.current = shapes;
+  const canEditBoardRef = useRef(canEditBoard);
+  canEditBoardRef.current = canEditBoard;
+  const editingTextIdRef = useRef(editingTextId);
+  editingTextIdRef.current = editingTextId;
   const activeCanvasTool: ToolType = canEditBoard ? selectedTool : "select";
 
   const {
@@ -110,6 +132,10 @@ export default function Page() {
     updateShapesLocally,
     emitCursorMove,
     setLaserStrokes,
+    onTextCreated: (shapeId, shapeData) => {
+      setEditingTextId(shapeId);
+      spawnTextarea(shapeId, "", shapeData);
+    },
   });
 
   const cursorLabelByUserId = useMemo(() => {
@@ -163,6 +189,12 @@ export default function Page() {
     for (const s of shapes) seen.set(s.id, s);
     return Array.from(seen.values());
   }, [shapes]);
+
+  const shapeTypeMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const s of renderedShapes) map[s.id] = s.type;
+    return map;
+  }, [renderedShapes]);
 
   const topTabs = ["Files", "Canvas", "Export", "History"] as const;
 
@@ -433,7 +465,9 @@ export default function Page() {
 
   // Multi-select helper functions
   const handleShapeSelect = (shapeId: string, shiftKey: boolean) => {
-    if (!canEditBoard || activeCanvasTool !== "select") return;
+    const isCommentTab = rightPanelTab === "comments";
+    if (!canEditBoard && activeCanvasTool !== "select" && !isCommentTab) return;
+    if (!isCommentTab && activeCanvasTool !== "select") return;
 
     if (shiftKey) {
       // Toggle shape in multi-select
@@ -454,31 +488,236 @@ export default function Page() {
 
   const isShapeSelected = (shapeId: string) => selectedShapeIds.has(shapeId);
 
-  // Keyboard shortcuts
+  // Text editing helpers
+  const spawnTextarea = (
+    shapeId: string,
+    text = "",
+    position?: { x: number; y: number; fontSize: number; fontFamily: string; color: string },
+  ) => {
+    const shape = position
+      ? { id: shapeId, type: "text" as const, x: position.x, y: position.y, fontSize: position.fontSize, fontFamily: position.fontFamily, color: position.color }
+      : (shapesRef.current.find((s) => s.id === shapeId) as { id: string; type: "text"; x: number; y: number; fontSize: number; fontFamily: string; color: string } | undefined);
+    if (!shape) return;
+
+    const existing = textareaRef.current;
+    if (existing && existing.parentNode) {
+      existing.parentNode.removeChild(existing);
+      textareaRef.current = null;
+    }
+
+    const container = boardWrapRef.current;
+    if (!container) return;
+
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.dataset.editingTextId = shapeId;
+    el.style.position = "absolute";
+    el.style.left = `${shape.x * zoom + viewport.x}px`;
+    el.style.top = `${shape.y * zoom + viewport.y}px`;
+    el.style.fontSize = `${shape.fontSize * zoom}px`;
+    el.style.fontFamily = shape.fontFamily || "Arial";
+    el.style.color = shape.color;
+    el.style.background = "rgba(255,255,255,0.9)";
+    el.style.border = "2px dashed #6366f1";
+    el.style.outline = "none";
+    el.style.resize = "none";
+    el.style.overflow = "hidden";
+    el.style.minWidth = "120px";
+    el.style.minHeight = `${shape.fontSize * zoom + 12}px`;
+    el.style.whiteSpace = "pre-wrap";
+    el.style.zIndex = "30";
+    el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
+    el.style.lineHeight = "1.3";
+    el.style.padding = "4px";
+    el.style.margin = "0";
+    el.style.borderRadius = "4px";
+
+    container.appendChild(el);
+    textareaRef.current = el;
+
+    el.focus();
+    el.select();
+
+    el.addEventListener("pointerdown", (e) => e.stopPropagation());
+
+    el.addEventListener("blur", () => {
+      finishTextEditing(el.value);
+      cleanupTextarea(el);
+    });
+
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cancelTextEditing(el.value);
+        cleanupTextarea(el);
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        finishTextEditing(el.value);
+        cleanupTextarea(el);
+      }
+    });
+  };
+
+  const cleanupTextarea = (el: HTMLTextAreaElement) => {
+    if (el.parentNode) el.parentNode.removeChild(el);
+    if (textareaRef.current === el) textareaRef.current = null;
+  };
+
+  const finishTextEditing = (text: string) => {
+    const id = editingTextIdRef.current;
+    if (!id) return;
+
+    if (!text.trim()) {
+      updateShapesLocally((prev) =>
+        prev.filter((shape) => shape.id !== id)
+      );
+    } else {
+      updateShapesLocally((prev) =>
+        prev.map((shape) =>
+          shape.id === id && shape.type === "text"
+            ? { ...shape, text }
+            : shape
+        )
+      );
+    }
+
+    setEditingTextId(null);
+  };
+
+  const cancelTextEditing = (text: string) => {
+    const id = editingTextIdRef.current;
+    if (!id) return;
+
+    if (!text.trim()) {
+      updateShapesLocally((prev) =>
+        prev.filter((shape) => shape.id !== id)
+      );
+    }
+
+    setEditingTextId(null);
+  };
+
+  // Handle transform end for Transformer
+  const handleTransformEnd = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tr = transformerRef.current as any;
+    if (!tr) return;
+
+    const ids = selectedShapeIdsRef.current;
+
+    updateShapesLocally((prev) => {
+      const next = [...prev];
+
+      ids.forEach((id) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const node = shapeRefs.current.get(id) as any;
+        if (!node) return;
+
+        const idx = next.findIndex((s) => s.id === id);
+        if (idx === -1) return;
+
+        const shape = next[idx];
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+
+        switch (shape.type) {
+          case "rectangle": {
+            const newWidth = Math.max(5, Math.abs(node.width() * scaleX));
+            const newHeight = Math.max(5, Math.abs(node.height() * scaleY));
+            node.setAttrs({ scaleX: 1, scaleY: 1, width: newWidth, height: newHeight });
+            next[idx] = ({ ...shape, x: node.x(), y: node.y(), width: newWidth, height: newHeight }) as BoardShape;
+            break;
+          }
+          case "circle": {
+            const newRadius = Math.max(5, Math.abs(node.radius() * scaleX));
+            node.setAttrs({ scaleX: 1, scaleY: 1, radius: newRadius });
+            next[idx] = ({ ...shape, x: node.x(), y: node.y(), radius: newRadius }) as BoardShape;
+            break;
+          }
+          case "ellipse": {
+            const newRadiusX = Math.max(5, Math.abs(node.radiusX() * scaleX));
+            const newRadiusY = Math.max(5, Math.abs(node.radiusY() * scaleY));
+            node.setAttrs({ scaleX: 1, scaleY: 1, radiusX: newRadiusX, radiusY: newRadiusY });
+            next[idx] = ({ ...shape, x: node.x(), y: node.y(), radiusX: newRadiusX, radiusY: newRadiusY }) as BoardShape;
+            break;
+          }
+          case "text": {
+            const newFontSize = Math.max(8, Math.round(node.fontSize() * scaleX));
+            node.setAttrs({ scaleX: 1, scaleY: 1, fontSize: newFontSize });
+            next[idx] = ({ ...shape, x: node.x(), y: node.y(), fontSize: newFontSize }) as BoardShape;
+            break;
+          }
+          case "image": {
+            const newWidth = Math.max(10, Math.abs(node.width() * scaleX));
+            const newHeight = Math.max(10, Math.abs(node.height() * scaleY));
+            node.setAttrs({ scaleX: 1, scaleY: 1, width: newWidth, height: newHeight });
+            next[idx] = ({ ...shape, x: node.x(), y: node.y(), width: newWidth, height: newHeight }) as BoardShape;
+            break;
+          }
+        }
+      });
+
+      return next;
+    });
+  };
+
+  // Attach/detach Transformer nodes
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tr = transformerRef.current as any;
+    if (!tr || selectedTool !== "select" || selectedShapeIds.size === 0) {
+      tr?.nodes([]);
+      tr?.getLayer()?.batchDraw();
+      return;
+    }
+
+    const nodes: unknown[] = [];
+    selectedShapeIds.forEach((id) => {
+      const node = shapeRefs.current.get(id);
+      if (!node) return;
+      const shape = renderedShapes.find((s) => s.id === id);
+      if (shape?.type === "line") return;
+      nodes.push(node);
+    });
+
+    tr.nodes(nodes);
+    tr.getLayer()?.batchDraw();
+  }, [selectedShapeIds, selectedTool, renderedShapes]);
+
+  // Keyboard shortcuts — stable effect, reads refs for safe closure access
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!canEditBoard) return;
+      if (editingTextIdRef.current) return;
 
-      // Delete selected shapes
-      if (e.key === "Delete" && selectedShapeIds.size > 0) {
+      const target = e.target as HTMLElement | null;
+      const isTyping =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.getAttribute("contenteditable") === "true";
+
+      if (isTyping) return;
+      if (!canEditBoardRef.current) return;
+
+      const ids = selectedShapeIdsRef.current;
+
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        ids.size > 0
+      ) {
         e.preventDefault();
         updateShapesLocally((prev) =>
-          prev.filter((shape) => !selectedShapeIds.has(shape.id))
-        );
-        persistShapes(
-          shapes.filter((shape) => !selectedShapeIds.has(shape.id))
+          prev.filter((shape) => !ids.has(shape.id))
         );
         setSelectedShapeIds(new Set());
-        toast.success(`Deleted ${selectedShapeIds.size} shape(s)`);
+        toast.success(`Deleted ${ids.size} shape(s)`);
       }
 
-      // Ctrl/Cmd+Z for undo
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         requestHistoryEvent("undo");
       }
 
-      // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y for redo
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
         e.preventDefault();
         requestHistoryEvent("redo");
@@ -487,7 +726,30 @@ export default function Page() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [canEditBoard, selectedShapeIds, shapes, updateShapesLocally, persistShapes]);
+  }, [updateShapesLocally]);
+
+  // Sync textarea position on zoom/scroll
+  useEffect(() => {
+    if (!editingTextId || !textareaRef.current) return;
+    const shape = shapes.find((s) => s.id === editingTextId);
+    if (!shape || shape.type !== "text") return;
+
+    const el = textareaRef.current;
+    el.style.left = `${shape.x * zoom + viewport.x}px`;
+    el.style.top = `${shape.y * zoom + viewport.y}px`;
+    el.style.fontSize = `${shape.fontSize * zoom}px`;
+    el.style.minHeight = `${shape.fontSize * zoom + 12}px`;
+  }, [editingTextId, zoom, viewport, shapes]);
+
+  // Cleanup textarea when editing ends
+  useEffect(() => {
+    if (editingTextId) return;
+    const el = textareaRef.current;
+    if (el && el.parentNode) {
+      el.parentNode.removeChild(el);
+      textareaRef.current = null;
+    }
+  }, [editingTextId]);
 
   // User search for share dialog
   useEffect(() => {
@@ -594,14 +856,14 @@ export default function Page() {
             onTouchEnd={handlePointerUp}
             onTouchCancel={handlePointerUp}
             onWheel={handleWheel}
-            onMouseDownCapture={(e: KonvaEventObject<MouseEvent>) => {
-              if (activeCanvasTool === "select" && !e.evt.shiftKey) {
-                // Only clear on empty space click (not on shape), handled by checking if target is Stage
-                if ((e.target as any).nodeType === "Stage") {
-                  setSelectedShapeIds(new Set());
+              onMouseDownCapture={(e: KonvaEventObject<MouseEvent>) => {
+                if (activeCanvasTool === "select" && !e.evt.shiftKey) {
+                  // Only clear on empty space click (not on shape), handled by checking if target is Stage
+                  if ((e.target as any).nodeType === "Stage") {
+                    setSelectedShapeIds(new Set());
+                  }
                 }
-              }
-            }}
+              }}
           >
             <Layer>
               <Rect
@@ -613,11 +875,13 @@ export default function Page() {
                 listening={false}
               />
               <Group x={viewport.x} y={viewport.y} scaleX={zoom} scaleY={zoom}>
-                {renderedShapes.map((shape) => {
+                  {renderedShapes.map((shape) => {
+                  const shapeCommentCount = commentCounts?.[shape.id] ?? 0;
                   if (shape.type === "line") {
                     return (
                       <Line
                         key={shape.id}
+                        id={shape.id}
                         points={shape.points}
                         stroke={shape.color}
                         strokeWidth={shape.strokeWidth}
@@ -635,7 +899,17 @@ export default function Page() {
                         onDragEnd={(event) => {
                           if (!canEditBoard || selectedTool !== "select") return;
                           const pos = event.target.position();
-                          updateShapePosition(shape.id, pos.x, pos.y);
+                          updateShapesLocally((prev) =>
+                            prev.map((s) => {
+                              if (s.id !== shape.id || s.type !== "line") return s;
+                              const dx = pos.x;
+                              const dy = pos.y;
+                              return {
+                                ...s,
+                                points: s.points.map((p, i) => p + (i % 2 === 0 ? dx : dy)),
+                              };
+                            })
+                          );
                           event.target.position({ x: 0, y: 0 });
                         }}
                         shadowEnabled={isShapeSelected(shape.id)}
@@ -653,6 +927,7 @@ export default function Page() {
                     return (
                       <Rect
                         key={shape.id}
+                        id={shape.id}
                         x={rect.x}
                         y={rect.y}
                         width={rect.width}
@@ -676,6 +951,11 @@ export default function Page() {
                         shadowEnabled={isShapeSelected(shape.id)}
                         shadowColor="#6366f1"
                         shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        ref={(node: any) => {
+                          if (node) shapeRefs.current.set(shape.id, node);
+                          else shapeRefs.current.delete(shape.id);
+                        }}
                       />
                     );
                   }
@@ -689,6 +969,10 @@ export default function Page() {
                           selected={isShapeSelected(shape.id)}
                           onSelect={(shiftKey) => handleShapeSelect(shape.id, shiftKey)}
                           onDragEnd={(x, y) => updateShapePosition(shape.id, x, y)}
+                          getShapeNode={(node) => {
+                            if (node) shapeRefs.current.set(shape.id, node);
+                            else shapeRefs.current.delete(shape.id);
+                          }}
                         />
                       );
                     }
@@ -697,6 +981,7 @@ export default function Page() {
                   return (
                     <Circle
                       key={shape.id}
+                      id={shape.id}
                       x={shape.x}
                       y={shape.y}
                       radius={shape.radius}
@@ -719,6 +1004,11 @@ export default function Page() {
                       shadowEnabled={isShapeSelected(shape.id)}
                       shadowColor="#6366f1"
                       shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      ref={(node: any) => {
+                        if (node) shapeRefs.current.set(shape.id, node);
+                        else shapeRefs.current.delete(shape.id);
+                      }}
                     />
                   );
                 }
@@ -727,6 +1017,7 @@ export default function Page() {
                   return (
                     <Ellipse
                       key={shape.id}
+                      id={shape.id}
                       x={shape.x}
                       y={shape.y}
                       radiusX={shape.radiusX}
@@ -750,6 +1041,11 @@ export default function Page() {
                       shadowEnabled={isShapeSelected(shape.id)}
                       shadowColor="#6366f1"
                       shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      ref={(node: any) => {
+                        if (node) shapeRefs.current.set(shape.id, node);
+                        else shapeRefs.current.delete(shape.id);
+                      }}
                     />
                   );
                 }
@@ -758,19 +1054,26 @@ export default function Page() {
                   return (
                     <Text
                       key={shape.id}
+                      id={shape.id}
                       x={shape.x}
                       y={shape.y}
                       text={shape.text}
                       fontSize={shape.fontSize}
                       fontFamily={shape.fontFamily || "Arial"}
                       fill={shape.color}
-                      draggable={canEditBoard && selectedTool === "select"}
+                      draggable={canEditBoard && selectedTool === "select" && editingTextId !== shape.id}
                       onClick={(e) => {
                         e.cancelBubble = true;
                         handleShapeSelect(shape.id, e.evt.shiftKey);
                       }}
                       onTap={() => {
                         handleShapeSelect(shape.id, false);
+                      }}
+                      onDblClick={() => {
+                        if (selectedTool === "select") {
+                          setEditingTextId(shape.id);
+                          spawnTextarea(shape.id, shape.text);
+                        }
                       }}
                       onDragEnd={(event) => {
                         if (!canEditBoard || selectedTool !== "select") return;
@@ -780,12 +1083,77 @@ export default function Page() {
                       shadowEnabled={isShapeSelected(shape.id)}
                       shadowColor="#6366f1"
                       shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      ref={(node: any) => {
+                        if (node) shapeRefs.current.set(shape.id, node);
+                        else shapeRefs.current.delete(shape.id);
+                      }}
                     />
                   );
                 }
 
                 return null;
               })}
+              {selectedTool === "select" && selectedShapeIds.size > 0 && (
+                <Transformer
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  ref={transformerRef as any}
+                  rotateEnabled={false}
+                  keepRatio={false}
+                  enabledAnchors={[
+                    "top-left",
+                    "top-center",
+                    "top-right",
+                    "middle-left",
+                    "middle-right",
+                    "bottom-left",
+                    "bottom-center",
+                    "bottom-right",
+                  ]}
+                  boundBoxFunc={(oldBox, newBox) => {
+                    if (newBox.width < 10 || newBox.height < 10) return oldBox;
+                    return newBox;
+                  }}
+                  onTransformEnd={handleTransformEnd}
+                />
+              )}
+              {commentCounts ? renderedShapes.map((shape) => {
+                const count = commentCounts[shape.id];
+                if (!count) return null;
+                let bx = 0, by = 0;
+                switch (shape.type) {
+                  case "rectangle": bx = shape.x + shape.width; by = shape.y; break;
+                  case "circle": bx = shape.x + shape.radius; by = shape.y - shape.radius; break;
+                  case "ellipse": bx = shape.x + shape.radiusX; by = shape.y - shape.radiusY; break;
+                  case "line": {
+                    const pts = shape.points;
+                    let mx = -Infinity, my = -Infinity;
+                    for (let i = 0; i < pts.length; i += 2) {
+                      if (pts[i] > mx) mx = pts[i];
+                      if (pts[i + 1] > my) my = pts[i + 1];
+                    }
+                    bx = mx; by = my;
+                    break;
+                  }
+                  case "text": bx = shape.x + 40; by = shape.y - 6; break;
+                  case "image": bx = shape.x + shape.width; by = shape.y; break;
+                }
+                return (
+                  <Group key={`badge-${shape.id}`} x={bx} y={by}>
+                    <Circle radius={9} fill="#6366f1" stroke="#fff" strokeWidth={2} />
+                    <Text
+                      x={-9} y={-7}
+                      width={18} height={14}
+                      text={String(count)}
+                      fontSize={10}
+                      fontStyle="bold"
+                      fill="#fff"
+                      align="center"
+                      verticalAlign="middle"
+                    />
+                  </Group>
+                );
+              }) : null}
               </Group>
             </Layer>
 
@@ -855,6 +1223,8 @@ export default function Page() {
           onRightPanelTabChange={setRightPanelTab}
           boardId={id}
           currentUserId={user?.id}
+          selectedShapeId={commentTargetShapeId}
+          shapeTypeMap={shapeTypeMap}
         />
 
         <BoardMobileChat boardId={id} currentUserId={user?.id} chatOpen={chatOpen} onClose={() => setChatOpen(false)} />
@@ -869,17 +1239,21 @@ const BoardImageShape = ({
   selected,
   onSelect,
   onDragEnd,
+  getShapeNode,
 }: {
   shape: ImageShape;
   draggable: boolean;
   selected: boolean;
   onSelect: (shiftKey: boolean) => void;
   onDragEnd: (x: number, y: number) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getShapeNode?: (node: any) => void;
 }) => {
   const image = useImageElement(shape.url);
 
   return (
     <KonvaImage
+      id={shape.id}
       image={image ?? undefined}
       x={shape.x}
       y={shape.y}
@@ -902,6 +1276,7 @@ const BoardImageShape = ({
       shadowEnabled={selected}
       shadowColor="#6366f1"
       shadowBlur={selected ? 8 : 0}
+      ref={getShapeNode}
     />
   );
 };

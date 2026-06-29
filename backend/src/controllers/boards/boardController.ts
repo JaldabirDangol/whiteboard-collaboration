@@ -170,7 +170,6 @@ export async function joinBoard(req: Request, res: Response) {
     }
 
     const result = await boardService.joinBoard(boardId, userId);
-    await logAction({ boardId, userId, action: "board.joined" });
     return res.json({
       message: "Joined board successfully",
       board: result.board,

@@ -366,6 +366,20 @@ export async function updateBoardMemberRole(
   return json;
 }
 
+export async function deleteBoard(boardId: string): Promise<{ message: string }> {
+  const res = await fetch(`${apiUrl}/boards/${boardId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Failed to delete board");
+  }
+
+  return json;
+}
+
 export async function removeBoardMember(boardId: string, userId: string): Promise<{ message: string }> {
   const res = await fetch(`${apiUrl}/boards/${boardId}/member/${userId}`, {
     method: "DELETE",

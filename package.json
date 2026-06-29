@@ -6,6 +6,7 @@
 		"dev:backend": "pnpm --dir backend run dev",
 		"dev:frontend": "pnpm --dir frontend run dev",
 		"build:backend": "pnpm --dir backend run build",
-		"build:frontend": "pnpm --dir frontend run build"
+		"build:frontend": "pnpm --dir frontend run build",
+		"build": "pnpm --dir backend run build && pnpm --dir frontend run build"
 	}
 }

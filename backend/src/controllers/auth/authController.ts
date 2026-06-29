@@ -3,6 +3,20 @@ import { prisma } from "@/lib/prisma.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+function cookieOptions() {
+  const frontendUrl = process.env.FRONTEND_URL || "";
+  const isCrossOrigin = frontendUrl && (
+    frontendUrl.startsWith("https://") ||
+    (frontendUrl.includes("//") && !frontendUrl.includes("localhost") && !frontendUrl.includes("127.0.0.1") && !frontendUrl.includes("0.0.0.0"))
+  );
+  return {
+    httpOnly: true as const,
+    secure: isCrossOrigin,
+    sameSite: isCrossOrigin ? "none" as const : "lax" as const,
+    maxAge: 3600 * 1000,
+  };
+}
+
 export async function Signup(req: Request, res: Response) {
     try {
         const { email, password } = req.body;
@@ -32,13 +46,12 @@ export async function Signup(req: Request, res: Response) {
 export async function Login(req: Request, res: Response) {
     try {
         const { email, password } = req.body;
-        const isProd = process.env.NODE_ENV === "production";
 
-        const normalizedEmail = email.trim().toLowerCase();
+        const normalizedEmail = email?.trim().toLowerCase();
         if (!normalizedEmail || !password) return res.status(400).json({ error: "Email and password are required" });
 
         const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-        if (!user || !user.password) return res.status(400).json({ error: "user doesnot exist ..." });
+        if (!user || !user.password) return res.status(400).json({ error: "User does not exist" });
 
        const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) return res.status(400).json({ error: "Invalid email or password" });
@@ -46,12 +59,7 @@ export async function Login(req: Request, res: Response) {
      const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET!, { expiresIn: "1h" })
 
 
-     res.cookie("token", token, {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? "none" : "lax",
-    maxAge: 3600 * 1000 // 1 hour
-})
+     res.cookie("token", token, cookieOptions())
 return res.status(200).json({ id: user.id, email: user.email, message: "Login successful" }) 
     } catch (error) {
         return res.status(400).json({ error: (error as Error).message });
@@ -61,12 +69,7 @@ return res.status(200).json({ id: user.id, email: user.email, message: "Login su
 
 export async function Logout(req: Request, res: Response) {
   try {
-                const isProd = process.env.NODE_ENV === "production";
-        res.clearCookie("token", {
-            httpOnly: true,
-                        secure: isProd,
-                        sameSite: isProd ? "none" : "lax",
-        }) 
+    res.clearCookie("token", cookieOptions())
     return res.status(200).json({ message: "Logged out" })
   } catch (error) {
     return res.status(500).json({ error: (error as Error).message })

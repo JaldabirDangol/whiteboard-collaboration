@@ -1,10 +1,23 @@
 import "dotenv/config";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import pg from "pg";
 
-const connectionString = `${process.env.DATABASE_URL}`;
+const connectionString = process.env.DATABASE_URL!;
 
-const adapter = new PrismaPg({ connectionString });
+const pool = new pg.Pool({
+  connectionString,
+  ssl:
+    connectionString.includes("sslmode=require") || connectionString.includes("sslmode=verify-full")
+      ? { rejectUnauthorized: false }
+      : connectionString.includes("sslmode=disable")
+        ? false
+        : connectionString.includes("sslmode=no-verify")
+          ? { rejectUnauthorized: false }
+          : undefined,
+});
+
+const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function connectDB() {
@@ -17,5 +30,4 @@ async function connectDB() {
   }
 }
 
-
-export { prisma ,connectDB };
+export { prisma, connectDB };

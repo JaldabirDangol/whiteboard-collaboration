@@ -306,25 +306,36 @@ export async function getLatestBoardSnapshot(boardId: string) {
 }
 
 export async function saveBoardSnapshot(boardId: string, data: unknown) {
-  const latest = await getLatestBoardSnapshot(boardId);
-  const nextVersion = latest ? latest.version + 1 : 1;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const latest = await tx.snapshot.findFirst({
+          where: { boardId },
+          orderBy: { version: "desc" },
+        });
+        const nextVersion = latest ? latest.version + 1 : 1;
 
-  return await prisma.$transaction(async (tx) => {
-    const snapshot = await tx.snapshot.create({
-      data: {
-        boardId,
-        version: nextVersion,
-        data: data as any,
-      },
-    });
+        const snapshot = await tx.snapshot.create({
+          data: {
+            boardId,
+            version: nextVersion,
+            data: data as any,
+          },
+        });
 
-    await tx.board.update({
-      where: { id: boardId },
-      data: { currentSnapshotVersion: nextVersion },
-    });
+        await tx.board.update({
+          where: { id: boardId },
+          data: { currentSnapshotVersion: nextVersion },
+        });
 
-    return snapshot;
-  });
+        return snapshot;
+      });
+    } catch (err: unknown) {
+      const prismaErr = err as { code?: string };
+      if (prismaErr.code === "P2002" && attempt < 2) continue;
+      throw err;
+    }
+  }
 }
 
 export async function getBoardCurrentSnapshotVersion(boardId: string) {

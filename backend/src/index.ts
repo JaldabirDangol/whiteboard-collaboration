@@ -18,7 +18,7 @@ import meRout from "@/routes/me.js";
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3050;
 
 const REQUIRED_ENVS = ["JWT_SECRET", "DATABASE_URL", "FRONTEND_URL"] as const;
 

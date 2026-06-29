@@ -9,11 +9,12 @@ export async function signup(email: string, password: string) {
     body: JSON.stringify({ email, password }),
   });
 
+  const json = await res.json();
   if (!res.ok) {
-    throw new Error("Signup failed");
+    throw new Error(json?.error || "Signup failed");
   }
 
-  return res.json();
+  return json;
 }
 
 export async function login(email: string, password: string) {

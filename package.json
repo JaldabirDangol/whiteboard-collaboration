@@ -2,7 +2,7 @@
 	"name": "whiteboard-collaboration",
 	"private": true,
 	"scripts": {
-		"dev": "sh -c 'pnpm --dir backend run dev & pnpm --dir frontend run dev & wait'",
+		"dev": "sh -c 'pnpm --dir backend run dev & pnpm --dir frontend run dev '",
 		"dev:backend": "pnpm --dir backend run dev",
 		"dev:frontend": "pnpm --dir frontend run dev",
 		"build:backend": "pnpm --dir backend run build",

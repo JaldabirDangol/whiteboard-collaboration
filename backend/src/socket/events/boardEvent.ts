@@ -208,21 +208,6 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
     console.log("[yjs:update] Triggered debounced persist");
   });
 
-  socket.on("board:sync", async ({ boardId, shapes }: { boardId: string; shapes: unknown[] }) => {
-    const canEdit = await canEditBoard(socket, boardId);
-    if (!canEdit) {
-      socket.emit("board:forbidden", {
-        boardId,
-        message: "You need editor access to modify this board",
-      });
-      return;
-    }
-
-    const doc = getYDoc(boardId);
-    applyShapesToDoc(doc, Array.isArray(shapes) ? shapes : []);
-    debouncedPersist(boardId, doc, socket.data.user?.id);
-  });
-
   // ── Explicit object-level events ──
 
   socket.on("board:draw", async (payload: {

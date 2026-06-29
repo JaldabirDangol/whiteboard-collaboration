@@ -2,7 +2,7 @@
 
 import { useToolStore, ToolType } from "@/store/useToolStore";
 import { ComponentType, SVGProps } from "react";
-import { Circle, Eraser, LassoSelect, Minus, Pen, Plus, RectangleEllipsis, Type, Zap, Palette, Undo, Redo } from "lucide-react";
+import { Circle, Eraser, Minus, Pen, Plus, RectangleEllipsis, Type, Zap, Undo, Redo } from "lucide-react";
 
 type Tool = {
   tool: ToolType;
@@ -13,6 +13,8 @@ type Tool = {
 type HeaderProps = {
   layout?: "horizontal" | "vertical";
   disabled?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 };
 
 const STROKE_MIN = 1;
@@ -20,12 +22,13 @@ const STROKE_MAX = 148;
 const STROKE_PRESETS = [2, 4, 8, 16, 32];
 
 const tools: Tool[] = [
-  { tool: "select", icon: LassoSelect, label: "Select" },
   { tool: "pen", icon: Pen, label: "Pen" },
   { tool: "eraser", icon: Eraser, label: "Eraser" },
+  { tool: "line", icon: Minus, label: "Line" },
   { tool: "laser", icon: Zap, label: "Laser" },
   { tool: "rectangle", icon: RectangleEllipsis, label: "Rectangle" },
   { tool: "circle", icon: Circle, label: "Circle" },
+  { tool: "ellipse", icon: Circle, label: "Ellipse" },
   { tool: "text", icon: Type, label: "Text" },
 ];
 
@@ -34,8 +37,8 @@ const ColorPresets = [
   "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899"
 ];
 
-export default function Header({ layout = "horizontal", disabled = false }: HeaderProps) {
-  const { selected, color, strokeWidth, setTool, setColor, setStrokeWidth } = useToolStore();
+export default function Header({ layout = "horizontal", disabled = false, onUndo, onRedo }: HeaderProps) {
+  const { selected, color, strokeWidth, fill, setTool, setColor, setStrokeWidth, setFill } = useToolStore();
   
   const setStroke = (next: number) => {
     const value = Number.isFinite(next) ? next : STROKE_MIN;
@@ -44,33 +47,36 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
 
   const decreaseStroke = () => setStroke(strokeWidth - 1);
   const increaseStroke = () => setStroke(strokeWidth + 1);
+  const toggleFill = () => setFill(fill ? undefined : color);
 
   if (layout === "vertical") {
     return (
-      <div className={`pointer-events-auto mt-3 flex h-[calc(100%-1.5rem)] w-18 flex-col items-center rounded-[1.5rem] border border-slate-200/60 bg-gradient-to-b from-white via-white/95 to-slate-50/90 py-4 shadow-xl shadow-slate-200/40 backdrop-blur-md ${
+      <div className={`pointer-events-auto mt-3 flex h-[calc(100%-1.5rem)] w-full flex-col items-center rounded-[1.5rem] border border-slate-200/60 bg-gradient-to-b from-white via-white/95 to-slate-50/90 py-4 shadow-xl shadow-slate-200/40 backdrop-blur-md overflow-y-auto ${
         disabled ? "opacity-60" : ""
       }`}>
         <div className="flex flex-col items-center gap-2">
           {tools.map((t) => {
             const Icon = t.icon;
             const isSelected = selected === t.tool;
+            const addGap = t.tool === "pen" || t.tool === "text";
             return (
-              <button
-                key={t.tool}
-                type="button"
-                disabled={disabled}
-                onClick={() => setTool(t.tool)}
-                title={t.label}
-                className={`group relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-200 ${
-                  disabled
-                    ? "cursor-not-allowed bg-slate-100/50 text-slate-400"
-                    : isSelected
-                      ? "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 ring-2 ring-indigo-400/50"
-                      : "bg-white/80 text-slate-600 hover:bg-slate-100 hover:scale-105"
-                }`}
-              >
-                <Icon className={`h-5 w-5 transition-transform ${isSelected ? '' : 'group-hover:scale-110'}`} />
-              </button>
+              <div key={t.tool} className={addGap ? "mt-2" : ""}>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setTool(t.tool)}
+                  title={t.label}
+                  className={`group relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-200 ${
+                    disabled
+                      ? "cursor-not-allowed bg-slate-100/50 text-slate-400"
+                      : isSelected
+                        ? "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 ring-2 ring-indigo-400/50"
+                        : "bg-white/80 text-slate-600 hover:bg-slate-100 hover:scale-105"
+                  }`}
+                >
+                  <Icon className={`h-5 w-5 transition-transform ${isSelected ? '' : 'group-hover:scale-110'}`} />
+                </button>
+              </div>
             );
           })}
         </div>
@@ -89,6 +95,28 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
             />
             <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: color }} />
           </div>
+
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={toggleFill}
+            title={fill ? "Fill on" : "Fill off"}
+            className={`flex h-10 w-10 items-center justify-center rounded-2xl border-2 transition-all ${
+              disabled
+                ? "cursor-not-allowed border-slate-200 bg-slate-100/50"
+                : fill
+                  ? "border-indigo-400 bg-indigo-50 shadow-md"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-md"
+            }`}
+          >
+            <div
+              className="h-4 w-4 rounded-sm"
+              style={{
+                backgroundColor: fill ? color : "transparent",
+                border: `2px solid ${fill ? color : "#94a3b8"}`,
+              }}
+            />
+          </button>
           
           <div className="flex flex-col items-center gap-1 mt-2">
             <input
@@ -151,15 +179,16 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
   }
 
   return (
-    <div className={`pointer-events-auto mx-2 mt-2 rounded-[1.25rem] border border-slate-200/50 bg-gradient-to-br from-white via-white to-slate-50/80 px-4 py-2.5 shadow-xl shadow-slate-200/30 backdrop-blur-md md:mx-4 md:mt-3 ${
+    <div className={`pointer-events-auto mx-2 mt-2 rounded-[1.25rem] border border-slate-200/50 bg-gradient-to-br from-white via-white to-slate-50/80 px-3 py-2 shadow-xl shadow-slate-200/30 backdrop-blur-md md:mx-4 md:mt-3 md:px-4 md:py-2.5 ${
       disabled ? "opacity-70" : ""
     }`}>
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 p-1.5 shadow-inner">
+      <div className="flex items-center gap-2 overflow-x-auto md:gap-3">
+        <div className="flex shrink-0 items-center gap-1 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 p-1.5 shadow-inner">
           <button
             type="button"
             aria-label="Undo"
             disabled={disabled}
+            onClick={onUndo}
             className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white hover:text-slate-700 hover:shadow-sm"
           >
             <Undo className="h-4 w-4" />
@@ -168,15 +197,16 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
             type="button"
             aria-label="Redo"
             disabled={disabled}
+            onClick={onRedo}
             className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white hover:text-slate-700 hover:shadow-sm"
           >
             <Redo className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="h-8 w-px bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
+        <div className="h-8 w-px shrink-0 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
 
-        <div className="flex items-center gap-1 rounded-2xl bg-gradient-to-br from-indigo-50 to-white p-1.5 shadow-sm ring-1 ring-indigo-100">
+        <div className="flex shrink-0 items-center gap-1 rounded-2xl bg-gradient-to-br from-indigo-50 to-white p-1.5 shadow-sm ring-1 ring-indigo-100">
           {tools.map((t) => {
             const Icon = t.icon;
             const isSelected = selected === t.tool;
@@ -194,16 +224,16 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
                       : "text-slate-600 hover:bg-white hover:text-slate-800 hover:shadow-sm"
                 }`}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4 shrink-0" />
                 <span className="hidden lg:inline">{t.label}</span>
               </button>
             );
           })}
         </div>
 
-        <div className="h-8 w-px bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
+        <div className="h-8 w-px shrink-0 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
 
-        <div className="flex items-center gap-2 rounded-2xl bg-white p-1.5 shadow-md ring-1 ring-slate-100">
+        <div className="flex shrink-0 items-center gap-2 rounded-2xl bg-white p-1.5 shadow-md ring-1 ring-slate-100">
           <div className="flex items-center gap-1.5 px-1">
             {ColorPresets.map((preset) => (
               <button
@@ -211,7 +241,7 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
                 type="button"
                 disabled={disabled}
                 onClick={() => setColor(preset)}
-                className={`relative h-7 w-7 rounded-full transition-all hover:scale-110 hover:shadow-md ${
+                className={`relative h-7 w-7 shrink-0 rounded-full transition-all hover:scale-110 hover:shadow-md ${
                   color === preset ? "ring-2 ring-offset-2 ring-indigo-500" : ""
                 }`}
                 style={{ backgroundColor: preset }}
@@ -225,7 +255,7 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
             ))}
           </div>
           
-          <div className="h-6 w-px bg-slate-200" />
+          <div className="h-6 w-px shrink-0 bg-slate-200" />
           
           <div className="relative">
             <input
@@ -237,17 +267,41 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
               className="h-8 w-8 cursor-pointer rounded-xl border-2 border-slate-200 bg-transparent p-0.5 transition-all hover:border-indigo-300 hover:scale-105"
             />
           </div>
+
+          <div className="h-6 w-px shrink-0 bg-slate-200" />
+          
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={toggleFill}
+            title={fill ? "Fill on" : "Fill off"}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border-2 transition-all ${
+              disabled
+                ? "cursor-not-allowed border-slate-200 bg-slate-100/50"
+                : fill
+                  ? "border-indigo-400 bg-indigo-50 shadow-sm"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+            }`}
+          >
+            <div
+              className="h-3.5 w-3.5 rounded-sm"
+              style={{
+                backgroundColor: fill ? color : "transparent",
+                border: `2px solid ${fill ? color : "#94a3b8"}`,
+              }}
+            />
+          </button>
         </div>
 
-        <div className="h-8 w-px bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
+        <div className="h-8 w-px shrink-0 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
 
-        <div className="flex items-center gap-2 rounded-2xl bg-gradient-to-br from-slate-50 to-white px-3 py-2 shadow-inner ring-1 ring-slate-100">
+        <div className="flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-br from-slate-50 to-white px-3 py-2 shadow-inner ring-1 ring-slate-100">
           <button
             type="button"
             aria-label="Decrease stroke"
             disabled={disabled || strokeWidth <= STROKE_MIN}
             onClick={decreaseStroke}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-40"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-40"
           >
             <Minus className="h-4 w-4" />
           </button>
@@ -272,7 +326,7 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
               max={STROKE_MAX}
               value={strokeWidth}
               onChange={(event) => setStroke(Number(event.target.value))}
-              className="h-8 w-14 rounded-lg border border-slate-200 bg-white px-2 text-center text-sm font-bold text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              className="h-8 w-14 shrink-0 rounded-lg border border-slate-200 bg-white px-2 text-center text-sm font-bold text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
             />
           </div>
           
@@ -281,20 +335,20 @@ export default function Header({ layout = "horizontal", disabled = false }: Head
             aria-label="Increase stroke"
             disabled={disabled || strokeWidth >= STROKE_MAX}
             onClick={increaseStroke}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-40"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-40"
           >
             <Plus className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="hidden lg:flex items-center gap-1 rounded-2xl bg-slate-100 p-1">
+        <div className="hidden shrink-0 lg:flex items-center gap-1 rounded-2xl bg-slate-100 p-1">
           {STROKE_PRESETS.map((preset) => (
             <button
               key={preset}
               type="button"
               disabled={disabled}
               onClick={() => setStroke(preset)}
-              className={`flex items-center justify-center rounded-lg transition-all hover:scale-110 ${
+              className={`flex shrink-0 items-center justify-center rounded-lg transition-all hover:scale-110 ${
                 disabled
                   ? "cursor-not-allowed opacity-50"
                   : strokeWidth === preset 

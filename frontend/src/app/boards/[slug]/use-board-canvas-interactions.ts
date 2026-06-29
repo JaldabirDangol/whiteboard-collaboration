@@ -13,6 +13,7 @@ const MIN_DRAW_DELTA = 0.5;
 
 type UseBoardCanvasInteractionsArgs = {
   selectedTool: ToolType;
+  canEdit: boolean;
   color: string;
   strokeWidth: number;
   setShapes: React.Dispatch<React.SetStateAction<BoardShape[]>>;
@@ -20,10 +21,12 @@ type UseBoardCanvasInteractionsArgs = {
   emitCursorMove: (position: { x: number; y: number }) => void;
   setLaserStrokes: React.Dispatch<React.SetStateAction<LaserStroke[]>>;
   onTextCreated?: (shapeId: string, shapeData: { x: number; y: number; fontSize: number; fontFamily: string; color: string }) => void;
+  drawingRef: React.MutableRefObject<boolean>;
 };
 
 export const useBoardCanvasInteractions = ({
   selectedTool,
+  canEdit,
   color,
   strokeWidth,
   setShapes,
@@ -31,6 +34,7 @@ export const useBoardCanvasInteractions = ({
   emitCursorMove,
   setLaserStrokes,
   onTextCreated,
+  drawingRef,
 }: UseBoardCanvasInteractionsArgs) => {
   const [zoom, setZoom] = useState(1);
   const [viewport, setViewport] = useState({ x: 0, y: 0 });
@@ -59,6 +63,11 @@ export const useBoardCanvasInteractions = ({
   useEffect(() => {
     strokeWidthRef.current = strokeWidth;
   }, [strokeWidth]);
+
+  const canEditRef = useRef(canEdit);
+  useEffect(() => {
+    canEditRef.current = canEdit;
+  }, [canEdit]);
 
   const clampZoom = (value: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
 
@@ -125,7 +134,10 @@ export const useBoardCanvasInteractions = ({
       return;
     }
 
-    if (currentTool === "select") return;
+    if (!canEditRef.current) return;
+
+    // Clicking on a shape node — skip drawing, let shape onClick handle selection
+    if (e.target !== e.target.getStage()) return;
 
     const pointer = getWorldPointer(e);
     if (!pointer) return;
@@ -160,9 +172,11 @@ export const useBoardCanvasInteractions = ({
     }
 
     isDrawing.current = true;
+    drawingRef.current = true;
     const id = newShapeId();
     draftShapeId.current = id;
     lastDrawPoint.current = pointer;
+    const currentFill = useToolStore.getState().fill;
 
     if (currentTool === "laser") {
       laserDraftId.current = id;
@@ -220,6 +234,7 @@ export const useBoardCanvasInteractions = ({
             height: 0,
             color: colorRef.current,
             strokeWidth: strokeWidthRef.current,
+            fill: currentFill,
           },
         ];
       }
@@ -235,6 +250,7 @@ export const useBoardCanvasInteractions = ({
             radius: 0,
             color: colorRef.current,
             strokeWidth: strokeWidthRef.current,
+            fill: currentFill,
           },
         ];
       }
@@ -251,6 +267,7 @@ export const useBoardCanvasInteractions = ({
             radiusY: 0,
             color: colorRef.current,
             strokeWidth: strokeWidthRef.current,
+            fill: currentFill,
           },
         ];
       }
@@ -383,6 +400,7 @@ export const useBoardCanvasInteractions = ({
     if (!isDrawing.current) return;
 
     isDrawing.current = false;
+    drawingRef.current = false;
     const laserId = laserDraftId.current;
     draftShapeId.current = null;
     laserDraftId.current = null;

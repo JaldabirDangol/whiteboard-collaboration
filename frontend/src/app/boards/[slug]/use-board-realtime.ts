@@ -26,6 +26,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
   const yBoardRef = useRef<Y.Map<string> | null>(null);
   const lastCursorEmitAt = useRef(0);
   const userIdRef = useRef(userId);
+  const drawingRef = useRef(false);
 
   const [shapes, setShapes] = useState<BoardShape[]>([]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
@@ -43,16 +44,9 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
     const normalizedShapes = normalizeShapesForClient(nextShapes);
 
-    console.log("[persistShapes] client shapes:", normalizedShapes.length, normalizedShapes.map((shape) => shape.type));
-
     doc.transact(() => {
       yBoard.set(SHAPES_KEY, JSON.stringify(normalizedShapes));
     }, LOCAL_ORIGIN);
-
-    socketRef.current?.emit("board:sync", {
-      boardId,
-      shapes: normalizedShapes,
-    });
   }, []);
 
 
@@ -141,6 +135,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     socketRef.current = socket;
 
     const applySnapshot = () => {
+      if (drawingRef.current) return;
       const snapshot = yBoard.get(SHAPES_KEY);
       setShapesWithCache(normalizeShapesForClient(parseShapes(snapshot)));
     };
@@ -312,5 +307,6 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     emitHistoryEvent,
     serverReadOnly,
     forbiddenMessage,
+    drawingRef,
   };
 };

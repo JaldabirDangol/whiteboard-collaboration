@@ -21,7 +21,6 @@ import BoardRightPanel from "./board-right-panel";
 import BoardMobileChat from "./board-mobile-chat";
 import { useBoardRealtime } from "./use-board-realtime";
 import { useBoardCanvasInteractions } from "./use-board-canvas-interactions";
-import type { ToolType } from "@/store/useToolStore";
 
 export default function Page() {
   const params = useParams();
@@ -94,6 +93,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     emitHistoryEvent,
     serverReadOnly,
     forbiddenMessage,
+    drawingRef,
   } = useBoardRealtime({
     boardId: id,
     userId: user?.id,
@@ -111,7 +111,6 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
   canEditBoardRef.current = canEditBoard;
   const editingTextIdRef = useRef(editingTextId);
   editingTextIdRef.current = editingTextId;
-  const activeCanvasTool: ToolType = canEditBoard ? selectedTool : "select";
 
   const {
     zoom,
@@ -125,13 +124,15 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     normalizeRect,
     updateShapePosition,
   } = useBoardCanvasInteractions({
-    selectedTool: activeCanvasTool,
+    selectedTool,
+    canEdit: canEditBoard,
     color,
     strokeWidth,
     setShapes,
     updateShapesLocally,
     emitCursorMove,
     setLaserStrokes,
+    drawingRef,
     onTextCreated: (shapeId, shapeData) => {
       setEditingTextId(shapeId);
       spawnTextarea(shapeId, "", shapeData);
@@ -426,18 +427,6 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
   }, []);
 
   useEffect(() => {
-    if (canEditBoard && useToolStore.getState().selected === "select") {
-      setTool("pen");
-    }
-  }, [canEditBoard, setTool]);
-
-  useEffect(() => {
-    if (!canEditBoard && selectedTool !== "select") {
-      setTool("select");
-    }
-  }, [canEditBoard, selectedTool, setTool]);
-
-  useEffect(() => {
     if (!forbiddenMessage) return;
     toast.error(forbiddenMessage);
   }, [forbiddenMessage]);
@@ -465,10 +454,6 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
   // Multi-select helper functions
   const handleShapeSelect = (shapeId: string, shiftKey: boolean) => {
-    const isCommentTab = rightPanelTab === "comments";
-    if (!canEditBoard && activeCanvasTool !== "select" && !isCommentTab) return;
-    if (!isCommentTab && activeCanvasTool !== "select") return;
-
     if (shiftKey) {
       // Toggle shape in multi-select
       setSelectedShapeIds((prev) => {
@@ -666,7 +651,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tr = transformerRef.current as any;
-    if (!tr || selectedTool !== "select" || selectedShapeIds.size === 0) {
+    if (!tr || selectedShapeIds.size === 0) {
       tr?.nodes([]);
       tr?.getLayer()?.batchDraw();
       return;
@@ -683,7 +668,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
     tr.nodes(nodes);
     tr.getLayer()?.batchDraw();
-  }, [selectedShapeIds, selectedTool, renderedShapes]);
+  }, [selectedShapeIds, renderedShapes]);
 
   // Keyboard shortcuts — stable effect, reads refs for safe closure access
   useEffect(() => {
@@ -828,10 +813,12 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
       />
 
       <div className="relative flex min-h-0 flex-1">
-        <aside className="hidden w-20 border-r border-slate-200 bg-linear-to-b from-white via-white to-slate-50 px-2 py-3 md:flex md:items-start md:justify-center">
+        <aside className="hidden w-24 border-r border-slate-200 bg-linear-to-b from-white via-white to-slate-50 px-2 py-3 md:flex md:items-start md:justify-center">
           <Header 
             layout="vertical" 
             disabled={mounted && !canEditBoard}
+            onUndo={() => requestHistoryEvent("undo")}
+            onRedo={() => requestHistoryEvent("redo")}
           />
         </aside>
 
@@ -839,6 +826,8 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
           <div className="absolute left-2 top-2 z-20 md:hidden">
             <Header 
               disabled={mounted && !canEditBoard}
+              onUndo={() => requestHistoryEvent("undo")}
+              onRedo={() => requestHistoryEvent("redo")}
             />
           </div>
 
@@ -857,8 +846,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
             onTouchCancel={handlePointerUp}
             onWheel={handleWheel}
               onMouseDownCapture={(e: KonvaEventObject<MouseEvent>) => {
-                if (activeCanvasTool === "select" && !e.evt.shiftKey) {
-                  // Only clear on empty space click (not on shape), handled by checking if target is Stage
+                if (!e.evt.shiftKey) {
                   if ((e.target as any).nodeType === "Stage") {
                     setSelectedShapeIds(new Set());
                   }
@@ -888,7 +876,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                         tension={0.5}
                         lineCap="round"
                         lineJoin="round"
-                        draggable={canEditBoard && selectedTool === "select"}
+                        draggable={canEditBoard}
                         onClick={(e) => {
                           e.cancelBubble = true;
                           handleShapeSelect(shape.id, e.evt.shiftKey);
@@ -897,7 +885,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                           handleShapeSelect(shape.id, false);
                         }}
                         onDragEnd={(event) => {
-                          if (!canEditBoard || selectedTool !== "select") return;
+                          if (!canEditBoard) return;
                           const pos = event.target.position();
                           updateShapesLocally((prev) =>
                             prev.map((s) => {
@@ -934,8 +922,8 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                         height={rect.height}
                         stroke={rect.color}
                         strokeWidth={rect.strokeWidth}
-                        fill="transparent"
-                        draggable={canEditBoard && selectedTool === "select"}
+                        fill={rect.fill || "transparent"}
+                        draggable={canEditBoard}
                         onClick={(e) => {
                           e.cancelBubble = true;
                           handleShapeSelect(shape.id, e.evt.shiftKey);
@@ -944,7 +932,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                           handleShapeSelect(shape.id, false);
                         }}
                         onDragEnd={(event) => {
-                          if (!canEditBoard || selectedTool !== "select") return;
+                          if (!canEditBoard) return;
                           const pos = event.target.position();
                           updateShapePosition(shape.id, pos.x, pos.y);
                         }}
@@ -965,7 +953,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                         <BoardImageShape
                           key={shape.id}
                           shape={shape}
-                          draggable={canEditBoard && selectedTool === "select"}
+                          draggable={canEditBoard}
                           selected={isShapeSelected(shape.id)}
                           onSelect={(shiftKey) => handleShapeSelect(shape.id, shiftKey)}
                           onDragEnd={(x, y) => updateShapePosition(shape.id, x, y)}
@@ -987,8 +975,8 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                       radius={shape.radius}
                       stroke={shape.color}
                       strokeWidth={shape.strokeWidth}
-                      fill="transparent"
-                      draggable={canEditBoard && selectedTool === "select"}
+                      fill={shape.fill || "transparent"}
+                      draggable={canEditBoard}
                       onClick={(e) => {
                         e.cancelBubble = true;
                         handleShapeSelect(shape.id, e.evt.shiftKey);
@@ -997,7 +985,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                         handleShapeSelect(shape.id, false);
                       }}
                       onDragEnd={(event) => {
-                        if (!canEditBoard || selectedTool !== "select") return;
+                        if (!canEditBoard) return;
                         const pos = event.target.position();
                         updateShapePosition(shape.id, pos.x, pos.y);
                       }}
@@ -1025,7 +1013,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                       stroke={shape.color}
                       strokeWidth={shape.strokeWidth}
                       fill={shape.fill || "transparent"}
-                      draggable={canEditBoard && selectedTool === "select"}
+                      draggable={canEditBoard}
                       onClick={(e) => {
                         e.cancelBubble = true;
                         handleShapeSelect(shape.id, e.evt.shiftKey);
@@ -1034,7 +1022,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                         handleShapeSelect(shape.id, false);
                       }}
                       onDragEnd={(event) => {
-                        if (!canEditBoard || selectedTool !== "select") return;
+                        if (!canEditBoard) return;
                         const pos = event.target.position();
                         updateShapePosition(shape.id, pos.x, pos.y);
                       }}
@@ -1061,7 +1049,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                       fontSize={shape.fontSize}
                       fontFamily={shape.fontFamily || "Arial"}
                       fill={shape.color}
-                      draggable={canEditBoard && selectedTool === "select" && editingTextId !== shape.id}
+                      draggable={canEditBoard && editingTextId !== shape.id}
                       onClick={(e) => {
                         e.cancelBubble = true;
                         handleShapeSelect(shape.id, e.evt.shiftKey);
@@ -1070,13 +1058,11 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                         handleShapeSelect(shape.id, false);
                       }}
                       onDblClick={() => {
-                        if (selectedTool === "select") {
-                          setEditingTextId(shape.id);
-                          spawnTextarea(shape.id, shape.text);
-                        }
+                        setEditingTextId(shape.id);
+                        spawnTextarea(shape.id, shape.text);
                       }}
                       onDragEnd={(event) => {
-                        if (!canEditBoard || selectedTool !== "select") return;
+                        if (!canEditBoard) return;
                         const pos = event.target.position();
                         updateShapePosition(shape.id, pos.x, pos.y);
                       }}
@@ -1094,7 +1080,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
                 return null;
               })}
-              {selectedTool === "select" && selectedShapeIds.size > 0 && (
+              {canEditBoard && selectedShapeIds.size > 0 && (
                 <Transformer
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   ref={transformerRef as any}

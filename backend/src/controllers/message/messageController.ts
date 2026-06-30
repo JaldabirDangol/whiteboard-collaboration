@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
 import * as messageService from "./messageService.js";
 import { getIO } from "@/socket/index.js";
 import { getBoardMember } from "@/controllers/boards/boardServices.js";
@@ -102,7 +102,9 @@ export const getMessagesByBoard = async (req: Request, res: Response) => {
     if (!membership) {
       return res.status(403).json({ message: "You do not have access to this board" });
     }
-    const messages = await messageService.getMessagesByBoard(boardId as string);
+    const skip = req.query.skip ? parseInt(req.query.skip as string, 10) : undefined;
+    const take = req.query.take ? parseInt(req.query.take as string, 10) : undefined;
+    const messages = await messageService.getMessagesByBoard(boardId as string, skip, take);
     res.status(200).json(messages);
   } catch (error) {
     console.error(`[GetMessagesByBoard Error]:`, error);

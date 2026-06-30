@@ -13,10 +13,12 @@ model User {
   name  String?
   password String?
   boards   BoardMember[]
+  createdBoards Board[]
   shapes   Shape[]
   messages Message[]
   comments Comment[]
   logs     AuditLog[]
+  notifications Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -24,12 +26,16 @@ model User {
 
 model Board {
   id    String @id @default(uuid())
-  title String @unique
+  title String
+
+  creatorId String
+  creator   User   @relation(fields: [creatorId], references: [id])
 
   members   BoardMember[]
   shapes    Shape[]
   snapshots Snapshot[]
   messages  Message[]
+  comments  Comment[]
   assets    Asset[]
   logs      AuditLog[]
   settings  BoardSettings?
@@ -38,6 +44,8 @@ model Board {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([title, creatorId])
 }
 
 model BoardMember {
@@ -65,6 +73,8 @@ model Shape {
 
   type ShapeType
   data Json
+
+  comments Comment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -104,7 +114,9 @@ model Comment {
   id String @id @default(uuid())
 
   boardId String
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
   shapeId String
+  shape   Shape  @relation(fields: [shapeId], references: [id], onDelete: Cascade)
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
@@ -144,6 +156,23 @@ model AuditLog {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  boardId String?
+  board   Board?  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  type    String   // "share_invite" | "mention"
+  message String
+  metadata Json?
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
 }
 
 model BoardSettings {

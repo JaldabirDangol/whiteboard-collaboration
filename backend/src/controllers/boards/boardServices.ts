@@ -5,6 +5,7 @@ export async function createBoard(data: { title: string; userId: string; thumbna
   return await prisma.board.create({
     data: {
       title: data.title,
+      creatorId: data.userId,
       thumbnailUrl: data.thumbnailUrl ?? null,
       currentSnapshotVersion: null,
       members: {
@@ -54,43 +55,37 @@ export async function getBoardsForUser(
     search?: string;
     sort?: "updatedAt" | "createdAt" | "title";
     order?: "asc" | "desc";
+    skip?: number;
+    take?: number;
   }
 ) {
-  const { filter = "all", search, sort = "updatedAt", order = "desc" } = options || {};
+  const { filter = "all", search, sort = "updatedAt", order = "desc", skip, take } = options || {};
 
-  const where: Record<string, unknown> = {
-    members: {
-      some: { userId },
-    },
+  const membersWhere: { userId: string; isStarred?: boolean; role?: { not: string } } = { userId };
+  if (filter === "starred") membersWhere.isStarred = true;
+  if (filter === "shared") membersWhere.role = { not: "ADMIN" };
+
+  const where = {
+    members: { some: membersWhere },
+    ...(search ? { title: { contains: search, mode: "insensitive" as const } } : {}),
   };
 
-  if (search) {
-    where.title = { contains: search, mode: "insensitive" };
-  }
+  const orderBy = filter === "all"
+    ? { [sort]: order }
+    : { updatedAt: order };
 
-  let orderBy: Record<string, string> = {};
-  if (filter === "recent") {
-    orderBy = { updatedAt: order };
-  } else if (filter === "starred") {
-    where.members.some = { userId, isStarred: true };
-    orderBy = { updatedAt: order };
-  } else if (filter === "shared") {
-    where.members = {
-      some: {
-        userId,
-        role: { not: "ADMIN" },
-      },
-    };
-    orderBy = { updatedAt: order };
-  } else {
-    orderBy = { [sort]: order };
-  }
+  const [boards, total] = await Promise.all([
+    prisma.board.findMany({
+      where,
+      include: { members: true },
+      orderBy,
+      skip,
+      take,
+    }),
+    prisma.board.count({ where }),
+  ]);
 
-  return await prisma.board.findMany({
-    where,
-    include: { members: true },
-    orderBy,
-  });
+  return { boards, total };
 }
 
 export async function updateBoard(id: string, data: { title?: string }) {
@@ -195,36 +190,6 @@ export async function shareBoardWithEmail(
   };
 }
 
-export async function getBoardData(boardId: string) {
-  const board = await prisma.board.findUnique({
-    where: { id: boardId },
-    include: {
-      shapes: true,
-      messages: {
-        include: {
-          user: {
-            select: { id: true, name: true },
-          },
-        },
-      },
-    },
-  });
-
-  if (!board) return null;
-
-  return {
-    shapes: board.shapes,
-    messages: board.messages.map((msg) => ({
-      id: msg.id,
-      content: msg.content,
-      userId: msg.userId,
-      userName: msg.user.name,
-      createdAt: msg.createdAt,
-    })),
-  };
-}
-
-
 export async function getRecentMessages(boardId: string, limit = 20) {  
   return await prisma.message.findMany({
     where: { boardId },
@@ -272,28 +237,58 @@ export async function replaceBoardShapes(
   userId: string,
   shapes: Record<string, unknown>[]
 ) {
-  const rows = shapes
-    .filter((shape) => typeof shape === "object" && shape !== null)
-    .map((shape) => ({
-      boardId,
-      userId,
-      type: toShapeType(shape.type),
-      data: shape as any,
-    }));
+  const valid = shapes.filter((s) => typeof s === "object" && s !== null);
+  if (valid.length === 0) {
+    await prisma.shape.deleteMany({ where: { boardId } });
+    return 0;
+  }
+
+  // Map incoming shape client-IDs for quick lookup
+  const incomingIds = new Set(valid.map((s) => s.id as string));
 
   await prisma.$transaction(async (tx) => {
-    await tx.shape.deleteMany({
+    // Fetch existing shapes and build clientId → dbId map
+    const existing = await tx.shape.findMany({
       where: { boardId },
+      select: { id: true, data: true },
     });
+    const clientToDb = new Map<string, string>();
+    for (const ex of existing) {
+      const clientId = (ex.data as Record<string, unknown> | null)?.id as string | undefined;
+      if (clientId) clientToDb.set(clientId, ex.id);
+    }
 
-    if (rows.length > 0) {
-      await tx.shape.createMany({
-        data: rows,
-      });
+    // Delete shapes whose client IDs are no longer present
+    const toDeleteIds = existing
+      .filter((ex) => {
+        const cid = (ex.data as Record<string, unknown> | null)?.id as string | undefined;
+        return cid && !incomingIds.has(cid);
+      })
+      .map((ex) => ex.id);
+
+    if (toDeleteIds.length > 0) {
+      await tx.shape.deleteMany({ where: { id: { in: toDeleteIds } } });
+    }
+
+    // Upsert each incoming shape
+    for (const shape of valid) {
+      const dbId = clientToDb.get(shape.id as string);
+      const rowData = {
+        boardId,
+        userId,
+        type: toShapeType(shape.type),
+        data: shape as any,
+      };
+
+      if (dbId) {
+        await tx.shape.update({ where: { id: dbId }, data: rowData });
+      } else {
+        await tx.shape.create({ data: rowData });
+      }
     }
   });
 
-  return rows.length;
+  return valid.length;
 }
 
 export async function getLatestBoardSnapshot(boardId: string) {
@@ -332,7 +327,10 @@ export async function saveBoardSnapshot(boardId: string, data: unknown) {
       });
     } catch (err: unknown) {
       const prismaErr = err as { code?: string };
-      if (prismaErr.code === "P2002" && attempt < 2) continue;
+      if (prismaErr.code === "P2002" && attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+        continue;
+      }
       throw err;
     }
   }

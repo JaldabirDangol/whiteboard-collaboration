@@ -27,6 +27,8 @@ export const useUserStore = create<UserStoreType>((set) => ({
 		try {
 			const data = await getMe();
 			set({ user: data?.user ?? null });
+		} catch {
+			set({ user: null });
 		} finally {
 			set({ loading: false });
 		}

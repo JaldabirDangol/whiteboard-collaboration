@@ -2,12 +2,15 @@ import type { Request, Response } from "express";
 import * as boardService from "./boardServices.js";
 import { prisma } from "@/lib/prisma.js";
 import { logAction } from "@/lib/auditLog.js";
+import { createNotification } from "@/controllers/notifications/notificationController.js";
+import { getIO } from "@/socket/index.js";
+import { destroyYDoc } from "@/socket/yjs.js";
 
 export async function createBoard(req: Request, res: Response) {
   try {
    const userId = req.user?.id;
     if (!userId) return res.status(400).json({ error: "User ID is required" });
-    if(!req.body) return res.status(400).json({error:"title is required"})
+    if(!req.body.title) return res.status(400).json({error:"title is required"})
 
     let board = await prisma.board.findUnique({
       where:{
@@ -41,8 +44,7 @@ export async function getBoard(req: Request, res: Response) {
 
     const board = await boardService.getBoard(id as string);
     if (!board) return res.status(404).json({ error: "Board not found" });
-   
-    console.log("Fetched board:", board);
+
     return res.json(board);
   } catch (error) {
     console.error("Error fetching board:", error);
@@ -55,15 +57,17 @@ export async function getBoardsForUser(req: Request, res: Response) {
     const userId = req.user?.id;
     if (!userId) return res.status(400).json({ error: "User ID is required" });
 
-    const { filter, search, sort, order } = req.query as {
-      filter?: "all" | "starred" | "shared" | "recent";
-      search?: string;
-      sort?: "updatedAt" | "createdAt" | "title";
-      order?: "asc" | "desc";
-    };
+    const { filter, search, sort, order, skip, take } = req.query as Record<string, string | undefined>;
 
-    const boards = await boardService.getBoardsForUser(userId, { filter, search, sort, order });
-    return res.json(boards);
+    const result = await boardService.getBoardsForUser(userId, {
+      filter: filter as "all" | "starred" | "shared" | "recent" | undefined,
+      search,
+      sort: sort as "updatedAt" | "createdAt" | "title" | undefined,
+      order: order as "asc" | "desc" | undefined,
+      skip: skip ? parseInt(skip, 10) : undefined,
+      take: take ? parseInt(take, 10) : undefined,
+    });
+    return res.json(result);
   } catch (error) {
     return res.status(400).json({ error: (error as Error).message });
   }
@@ -108,7 +112,10 @@ export async function updateBoardMember(req: Request, res: Response) {
       return res.status(403).json({ error: "Only board admins can update member roles" });
     }
 
-    const member = await boardService.updateBoardMember(boardId as string, userId, role || "VIEWER");
+    if (role !== "ADMIN" && role !== "EDITOR" && role !== "VIEWER") {
+      return res.status(400).json({ error: "Invalid role. Must be ADMIN, EDITOR, or VIEWER" });
+    }
+    const member = await boardService.updateBoardMember(boardId as string, userId, role);
     return res.json({ message: "Member updated successfully", member });
   } catch (error) {
     return res.status(400).json({ error: (error as Error).message });
@@ -144,6 +151,15 @@ export async function shareBoard(req: Request, res: Response) {
     );
 
     await logAction({ boardId, userId: ownerUserId, action: "board.shared", metadata: { email: email.trim().toLowerCase(), role: nextRole } });
+
+    const board = await prisma.board.findUnique({ where: { id: boardId }, select: { title: true } });
+    createNotification(
+      result.user.id,
+      "share_invite",
+      `You've been invited as ${nextRole.toLowerCase()} to "${board?.title ?? "a board"}"`,
+      boardId,
+      { sharedBy: ownerUserId, role: nextRole }
+    ).catch(() => {});
 
     return res.json({
       message: "Board shared successfully",
@@ -195,6 +211,13 @@ export async function deleteBoard(req: Request, res: Response) {
 
     const board = await boardService.deleteBoard(id as string);
     await logAction({ boardId: id as string, userId: actorUserId, action: "board.deleted", metadata: { title: board.title } });
+
+    // Notify connected users and clean up Y.Doc
+    try {
+      getIO().to(id as string).emit("board:deleted", { boardId: id });
+    } catch { /* socket not initialized — fine for REST-only usage */ }
+    destroyYDoc(id as string);
+
     return res.json({
       message: "Board deleted successfully",
       boardTitle: board.title,

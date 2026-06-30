@@ -17,6 +17,7 @@ type BoardRightPanelProps = {
   currentUserId?: string;
   selectedShapeId?: string | null;
   shapeTypeMap?: Record<string, string>;
+  onlineUserIds?: Set<string>;
 };
 
 export default function BoardRightPanel({
@@ -27,8 +28,10 @@ export default function BoardRightPanel({
   currentUserId,
   selectedShapeId,
   shapeTypeMap,
+  onlineUserIds,
 }: BoardRightPanelProps) {
   const displayMembers = members.length ? members : [{ id: "you", initials: "YO", label: "You", role: "ADMIN" }];
+  const onlineCount = onlineUserIds?.size ?? 0;
 
   return (
     <aside className="hidden h-full w-80 border-l border-slate-200 bg-white lg:flex lg:flex-col">
@@ -37,24 +40,27 @@ export default function BoardRightPanel({
           <p className="text-sm font-semibold text-slate-900">Team</p>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200/70">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Online
+            {onlineCount} online
           </span>
         </div>
-        <div className="flex items-center -space-x-2">
-          {displayMembers.slice(0, 5).map((member) => (
-            <div
-              key={member.id}
-              title={`${member.label} (${member.role})`}
-              className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 text-[11px] font-semibold text-white ring-2 ring-white shadow-sm"
-            >
-              {member.initials}
-            </div>
-          ))}
-          {displayMembers.length > 5 ? (
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500 ring-2 ring-white">
-              +{displayMembers.length - 5}
-            </span>
-          ) : null}
+        <div className="flex flex-wrap gap-1.5">
+          {displayMembers.map((member) => {
+            const isOnline = onlineUserIds?.has(member.id) ?? false;
+            return (
+              <div
+                key={member.id}
+                title={`${member.label} (${member.role})${isOnline ? " — Online" : ""}`}
+                className="relative"
+              >
+                <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 text-[11px] font-semibold text-white ring-2 ring-white shadow-sm">
+                  {member.initials}
+                </div>
+                {isOnline && (
+                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 

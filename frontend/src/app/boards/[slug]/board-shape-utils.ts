@@ -174,6 +174,80 @@ export const toUint8 = (value: unknown): Uint8Array => {
   return new Uint8Array();
 };
 
+export function serializeShapesToSvg(shapes: BoardShape[], title: string): string {
+  if (shapes.length === 0) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 400" width="500" height="400"><rect width="100%" height="100%" fill="white"/></svg>`;
+  }
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+  const expandBounds = (x: number, y: number, w: number, h: number) => {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + w);
+    maxY = Math.max(maxY, y + h);
+  };
+
+  shapes.forEach((s) => {
+    switch (s.type) {
+      case "rectangle": expandBounds(s.x, s.y, s.width, s.height); break;
+      case "circle": expandBounds(s.x - s.radius, s.y - s.radius, s.radius * 2, s.radius * 2); break;
+      case "ellipse": expandBounds(s.x - s.radiusX, s.y - s.radiusY, s.radiusX * 2, s.radiusY * 2); break;
+      case "text": expandBounds(s.x, s.y, s.text.length * (s.fontSize || 16) * 0.6, (s.fontSize || 16) * 1.4); break;
+      case "line": {
+        for (let i = 0; i < s.points.length; i += 2) {
+          expandBounds(s.points[i], s.points[i + 1], 1, 1);
+        }
+        break;
+      }
+      case "image": expandBounds(s.x, s.y, s.width, s.height); break;
+    }
+  });
+
+  const pad = 40;
+  const w = Math.max(maxX - minX + pad * 2, 200);
+  const h = Math.max(maxY - minY + pad * 2, 200);
+  const ox = -minX + pad;
+  const oy = -minY + pad;
+
+  const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  const elements: string[] = [];
+
+  shapes.forEach((s) => {
+    const fill = s.fill && s.fill !== "transparent" ? s.fill : "none";
+    const stroke = s.type !== "image" ? `stroke="${s.color}" stroke-width="${s.strokeWidth}"` : "";
+
+    switch (s.type) {
+      case "rectangle":
+        elements.push(`<rect x="${s.x + ox}" y="${s.y + oy}" width="${s.width}" height="${s.height}" fill="${fill}" ${stroke}/>`);
+        break;
+      case "circle":
+        elements.push(`<circle cx="${s.x + ox}" cy="${s.y + oy}" r="${s.radius}" fill="${fill}" ${stroke}/>`);
+        break;
+      case "ellipse":
+        elements.push(`<ellipse cx="${s.x + ox}" cy="${s.y + oy}" rx="${s.radiusX}" ry="${s.radiusY}" fill="${fill}" ${stroke}/>`);
+        break;
+      case "line": {
+        const pts = s.points.map((p, i) => (i % 2 === 0 ? p + ox : p + oy)).join(",");
+        elements.push(`<polyline points="${pts}" fill="none" ${stroke}/>`);
+        break;
+      }
+      case "text":
+        elements.push(`<text x="${s.x + ox}" y="${s.y + oy + (s.fontSize || 16)}" font-family="${s.fontFamily || "Arial"}" font-size="${s.fontSize || 16}" fill="${s.color}">${esc(s.text)}</text>`);
+        break;
+      case "image":
+        elements.push(`<image x="${s.x + ox}" y="${s.y + oy}" width="${s.width}" height="${s.height}" href="${esc(s.url)}"/>`);
+        break;
+    }
+  });
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+  <rect width="100%" height="100%" fill="white"/>
+  ${elements.join("\n  ")}
+</svg>`;
+}
+
 export const newShapeId = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();

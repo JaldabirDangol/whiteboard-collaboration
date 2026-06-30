@@ -38,7 +38,7 @@ const ColorPresets = [
 ];
 
 export default function Header({ layout = "horizontal", disabled = false, onUndo, onRedo }: HeaderProps) {
-  const { selected, color, strokeWidth, fill, setTool, setColor, setStrokeWidth, setFill } = useToolStore();
+  const { selected, color, strokeWidth, fill, fontSize, fontFamily, setTool, setColor, setStrokeWidth, setFill, setFontSize, setFontFamily } = useToolStore();
   
   const setStroke = (next: number) => {
     const value = Number.isFinite(next) ? next : STROKE_MIN;
@@ -173,6 +173,56 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
               />
             ))}
           </div>
+
+          <div className="my-4 h-px w-10 bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
+
+          <div className="flex flex-col items-center gap-3">
+            <span className="text-xs font-semibold text-slate-500">A</span>
+            <button
+              type="button"
+              aria-label="Decrease font size"
+              disabled={disabled || fontSize <= 8}
+              onClick={() => setFontSize(Math.max(8, fontSize - 2))}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-40"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <input
+              aria-label="Font size"
+              type="number"
+              disabled={disabled}
+              min={8}
+              max={120}
+              value={fontSize}
+              onChange={(e) => setFontSize(Math.max(8, Math.min(120, Math.round(Number(e.target.value)))))}
+              className="h-8 w-14 rounded-lg border border-slate-200 bg-white px-2 text-center text-sm font-bold text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            />
+            <button
+              type="button"
+              aria-label="Increase font size"
+              disabled={disabled || fontSize >= 120}
+              onClick={() => setFontSize(Math.min(120, fontSize + 2))}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-40"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+          <select
+            aria-label="Font family"
+            disabled={disabled}
+            value={fontFamily}
+            onChange={(e) => setFontFamily(e.target.value)}
+            className="mt-3 h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+          >
+            <option value="Arial">Arial</option>
+            <option value="Helvetica">Helvetica</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Courier New">Courier New</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Verdana">Verdana</option>
+            <option value="Trebuchet MS">Trebuchet MS</option>
+            <option value="Impact">Impact</option>
+          </select>
         </div>
       </div>
     );
@@ -359,6 +409,61 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
               title={`${preset}px`}
             />
           ))}
+        </div>
+
+        <div className="h-8 w-px shrink-0 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
+
+        <div className="flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-br from-slate-50 to-white px-3 py-2 shadow-inner ring-1 ring-slate-100">
+          <select
+            aria-label="Font family"
+            disabled={disabled}
+            value={fontFamily}
+            onChange={(e) => setFontFamily(e.target.value)}
+            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+          >
+            <option value="Arial">Arial</option>
+            <option value="Helvetica">Helvetica</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Courier New">Courier New</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Verdana">Verdana</option>
+            <option value="Trebuchet MS">Trebuchet MS</option>
+            <option value="Impact">Impact</option>
+          </select>
+        </div>
+
+        <div className="h-8 w-px shrink-0 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
+
+        <div className="flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-br from-slate-50 to-white px-3 py-2 shadow-inner ring-1 ring-slate-100">
+          <span className="text-xs font-semibold text-slate-500">A</span>
+          <button
+            type="button"
+            aria-label="Decrease font size"
+            disabled={disabled || fontSize <= 8}
+            onClick={() => setFontSize(Math.max(8, fontSize - 2))}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-40"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <input
+            aria-label="Font size"
+            type="number"
+            disabled={disabled}
+            min={8}
+            max={120}
+            value={fontSize}
+            onChange={(e) => setFontSize(Math.max(8, Math.min(120, Math.round(Number(e.target.value)))))}
+            className="h-8 w-14 shrink-0 rounded-lg border border-slate-200 bg-white px-2 text-center text-sm font-bold text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+          />
+          <button
+            type="button"
+            aria-label="Increase font size"
+            disabled={disabled || fontSize >= 120}
+            onClick={() => setFontSize(Math.min(120, fontSize + 2))}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-40"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>

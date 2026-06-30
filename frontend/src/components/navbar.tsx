@@ -15,6 +15,7 @@ import { logout } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/store/useUserStore";
 import { LogOut, Plus, Search, Loader2 } from "lucide-react";
+import NotificationBell from "@/components/notification-bell";
 
 interface NavbarProps {
   search?: string;
@@ -105,6 +106,7 @@ const Navbar = ({ search = "", onSearchChange }: NavbarProps) => {
       </div>
 
       <div className="flex items-center gap-2">
+        <NotificationBell />
         <div className="flex items-center gap-2.5 pr-3 py-1.5 pl-1.5 bg-slate-50 rounded-xl border border-slate-200">
           <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium shadow-sm">
             {userInitials}

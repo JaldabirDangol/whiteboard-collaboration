@@ -31,8 +31,11 @@ export async function updateSettings(req: Request, res: Response) {
     if (!boardId) return res.status(400).json({ error: "Board ID is required" });
 
     const membership = await getBoardMember(boardId, userId);
-    if (!membership || membership.role !== "ADMIN") {
-      return res.status(403).json({ error: "Only board admins can update settings" });
+    if (!membership) {
+      return res.status(403).json({ error: "You do not have access to this board" });
+    }
+    if (membership.role !== "ADMIN") {
+      return res.status(403).json({ error: "Admin access required" });
     }
 
     const { isPublic, password } = req.body;

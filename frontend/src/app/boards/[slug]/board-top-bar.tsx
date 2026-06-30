@@ -1,13 +1,18 @@
-import { Cog, HelpCircle, MessageSquareMore, Share2, X } from "lucide-react";
+import { Cog, HelpCircle, MessageSquareMore, Share2, X, Maximize, Minimize, RotateCcw, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AVATAR_COLORS, getInitials } from "./board-profile-utils";
+import { useQuery } from "@tanstack/react-query";
+import { getBoardActivity, type BoardActivity } from "@/lib/api";
+import SnapshotDialog from "./board-snapshot-dialog";
 
 type TopTab = "Files" | "Canvas" | "Export" | "History";
 
 type BoardTopBarProps = {
+  boardId: string;
   boardTitle: string;
   isViewOnly: boolean;
+  saveStatus: "saved" | "saving";
   topTabs: readonly TopTab[];
   activeTopTab: TopTab;
   onTopTabClick: (tab: TopTab) => void;
@@ -48,11 +53,17 @@ type BoardTopBarProps = {
   onHelpOpenChange: (open: boolean) => void;
   avatarColor: string;
   avatarInitials: string;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+  showGrid?: boolean;
+  onToggleGrid?: () => void;
 };
 
 export default function BoardTopBar({
+  boardId,
   boardTitle,
   isViewOnly,
+  saveStatus,
   topTabs,
   activeTopTab,
   onTopTabClick,
@@ -93,7 +104,31 @@ export default function BoardTopBar({
   onHelpOpenChange,
   avatarColor,
   avatarInitials,
+  isFullscreen,
+  onToggleFullscreen,
+  showGrid,
+  onToggleGrid,
 }: BoardTopBarProps) {
+  const { data: activityData } = useQuery({
+    queryKey: ["board-activity-history", boardId],
+    queryFn: () => getBoardActivity(boardId),
+    enabled: Boolean(boardId && historyOpen),
+    staleTime: 10_000,
+  });
+
+  const historyEntries = activityData ?? [];
+
+  const formatAction = (action: string) => {
+    const map: Record<string, string> = {
+      "board:undo": "Undo",
+      "board:redo": "Redo",
+      "object.created": "Created shape",
+      "object.updated": "Updated shape",
+      "object.deleted": "Deleted shape",
+    };
+    return map[action] || action;
+  };
+
   return (
     <div className="z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur-sm px-3 md:px-4">
       <div className="flex min-w-0 items-center gap-3">
@@ -108,6 +143,10 @@ export default function BoardTopBar({
         >
           <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 ${isViewOnly ? "bg-amber-500" : "bg-emerald-500"}`} />
           {isViewOnly ? "View only" : "Can edit"}
+        </span>
+        <span className="hidden items-center gap-1 text-[11px] text-slate-400 md:inline-flex">
+          <span className={`inline-block h-1.5 w-1.5 rounded-full ${saveStatus === "saving" ? "bg-amber-400 animate-pulse" : "bg-emerald-400"}`} />
+          {saveStatus === "saving" ? "Saving..." : "Saved"}
         </span>
         <div className="hidden items-center gap-4 text-sm md:flex">
           {topTabs.map((tab) => (
@@ -128,6 +167,30 @@ export default function BoardTopBar({
       </div>
 
       <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onToggleGrid}
+          className={`hidden h-8 w-8 items-center justify-center rounded-lg transition-colors md:flex ${
+            showGrid ? "bg-indigo-100 text-indigo-600" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          }`}
+          title={showGrid ? "Hide grid" : "Show grid"}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={onToggleFullscreen}
+          className="hidden h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors md:flex"
+          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+        >
+          {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+        </button>
+
         <Button type="button" variant="outline" size="sm" className="md:hidden" onClick={onToggleChat}>
           {chatOpen ? <X className="h-4 w-4" /> : <MessageSquareMore className="h-4 w-4" />}
         </Button>
@@ -220,27 +283,39 @@ export default function BoardTopBar({
         </Dialog>
 
         <Dialog open={historyOpen} onOpenChange={onHistoryOpenChange}>
-          <DialogContent>
+          <DialogContent className="max-h-[80vh]">
             <DialogHeader>
               <DialogTitle>History</DialogTitle>
             </DialogHeader>
             <div className="space-y-3 text-sm text-slate-600">
-              <p>Use undo/redo controls or keyboard shortcuts.</p>
               <div className="grid grid-cols-2 gap-2">
                 <Button type="button" variant="outline" onClick={onUndo}>
-                  Undo
+                  <RotateCcw className="h-4 w-4 mr-1" /> Undo
                 </Button>
                 <Button type="button" variant="outline" onClick={onRedo}>
-                  Redo
+                  <RotateCw className="h-4 w-4 mr-1" /> Redo
                 </Button>
               </div>
               <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500 space-y-1">
                 <p><kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono">Ctrl/Cmd + Z</kbd> Undo</p>
                 <p><kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono">Ctrl/Cmd + Shift + Z</kbd> Redo</p>
               </div>
+              {historyEntries.length > 0 && (
+                <div className="max-h-60 overflow-auto space-y-1 border-t border-slate-100 pt-3">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Recent activity</p>
+                  {historyEntries.slice(0, 20).map((entry: BoardActivity) => (
+                    <div key={entry.id} className="flex items-center justify-between py-1.5 text-xs">
+                      <span className="text-slate-700">{formatAction(entry.action)}</span>
+                      <span className="text-slate-400">{new Date(entry.createdAt).toLocaleTimeString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
+
+        <SnapshotDialog boardId={boardId} />
 
         <Dialog open={settingsOpen} onOpenChange={onSettingsOpenChange}>
           <button

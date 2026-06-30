@@ -15,7 +15,9 @@ export async function getBoardLogs(req: Request, res: Response) {
       return res.status(403).json({ error: "You do not have access to this board" });
     }
 
-    const logs = await getLogsForBoardWithUsers(boardId);
+    const skip = req.query.skip ? parseInt(req.query.skip as string, 10) : undefined;
+    const take = req.query.take ? parseInt(req.query.take as string, 10) : undefined;
+    const logs = await getLogsForBoardWithUsers(boardId, skip, take);
     return res.json(logs);
   } catch (error) {
     return res.status(500).json({ error: (error as Error).message });

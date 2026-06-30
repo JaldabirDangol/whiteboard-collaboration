@@ -148,7 +148,9 @@ export const getCommentsByBoard = async (req: Request, res: Response) => {
       return res.status(403).json({ message: "You do not have access to this board" });
     }
 
-    const comments = await commentService.getCommentsByBoard(boardId as string);
+    const skip = req.query.skip ? parseInt(req.query.skip as string, 10) : undefined;
+    const take = req.query.take ? parseInt(req.query.take as string, 10) : undefined;
+    const comments = await commentService.getCommentsByBoard(boardId as string, skip, take);
     res.status(200).json(comments);
   } catch (error) {
     console.error("[GetCommentsByBoard Error]:", error);

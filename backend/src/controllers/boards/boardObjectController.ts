@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as boardService from "./boardServices.js";
 import { logAction } from "@/lib/auditLog.js";
+import { restoreSnapshot } from "@/lib/boardRestore.js";
 
 export async function createObject(req: Request, res: Response) {
   try {
@@ -103,6 +104,24 @@ export async function getSnapshotById(req: Request, res: Response) {
     }
 
     return res.json(snapshot);
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function restoreSnapshotAction(req: Request, res: Response) {
+  try {
+    const boardId = req.params.id as string;
+    const snapshotId = req.params.snapshotId as string;
+    const userId = req.user?.id;
+
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!boardId || !snapshotId) {
+      return res.status(400).json({ error: "Board ID and Snapshot ID are required" });
+    }
+
+    await restoreSnapshot(boardId, userId, snapshotId);
+    return res.json({ message: "Snapshot restored successfully" });
   } catch (error) {
     return res.status(500).json({ error: (error as Error).message });
   }

@@ -164,3 +164,11 @@ html{
     to { opacity: 1; transform: translateY(0); }
   }
 }
+
+@media print {
+  body * { visibility: hidden; }
+  .react-konva-canvas { visibility: visible; position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .react-konva-canvas * { visibility: visible; }
+  header, aside, nav, footer, .z-30, [class*="fixed"], [class*="sticky"] { display: none !important; }
+  @page { margin: 0.5in; }
+}

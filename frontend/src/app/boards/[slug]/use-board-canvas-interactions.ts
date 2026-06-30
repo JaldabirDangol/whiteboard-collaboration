@@ -5,11 +5,41 @@ import { useToolStore } from "@/store/useToolStore";
 import type { BoardShape, LaserStroke, RectShape } from "./board-types";
 import { newShapeId } from "./board-shape-utils";
 
+export interface MarqueeRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
 const LASER_TTL_MS = 1000;
 const LASER_COLOR = "#f23523";
 const MIN_DRAW_DELTA = 0.5;
+const GRID_SIZE = 20;
+
+const snap = (value: number) => Math.round(value / GRID_SIZE) * GRID_SIZE;
+
+export const getAABB = (s: BoardShape): { x: number; y: number; w: number; h: number } | null => {
+  if (s.type === "line") {
+    if (s.points.length < 2) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let i = 0; i < s.points.length; i += 2) {
+      if (s.points[i] < minX) minX = s.points[i];
+      if (s.points[i + 1] < minY) minY = s.points[i + 1];
+      if (s.points[i] > maxX) maxX = s.points[i];
+      if (s.points[i + 1] > maxY) maxY = s.points[i + 1];
+    }
+    return { x: minX, y: minY, w: maxX - minX || 1, h: maxY - minY || 1 };
+  }
+  if (s.type === "rectangle") return { x: s.x, y: s.y, w: s.width, h: s.height };
+  if (s.type === "circle") return { x: s.x - s.radius, y: s.y - s.radius, w: s.radius * 2, h: s.radius * 2 };
+  if (s.type === "ellipse") return { x: s.x - s.radiusX, y: s.y - s.radiusY, w: s.radiusX * 2, h: s.radiusY * 2 };
+  if (s.type === "image") return { x: s.x, y: s.y, w: s.width, h: s.height };
+  if (s.type === "text") return { x: s.x, y: s.y, w: s.text.length * s.fontSize * 0.6 + 10, h: s.fontSize + 10 };
+  return null;
+};
 
 type UseBoardCanvasInteractionsArgs = {
   selectedTool: ToolType;
@@ -20,8 +50,11 @@ type UseBoardCanvasInteractionsArgs = {
   updateShapesLocally: (updater: (prev: BoardShape[]) => BoardShape[]) => void;
   emitCursorMove: (position: { x: number; y: number }) => void;
   setLaserStrokes: React.Dispatch<React.SetStateAction<LaserStroke[]>>;
+  emitLaserStroke?: (stroke: { id: string; points: number[]; color: string; strokeWidth: number }) => void;
   onTextCreated?: (shapeId: string, shapeData: { x: number; y: number; fontSize: number; fontFamily: string; color: string }) => void;
   drawingRef: React.MutableRefObject<boolean>;
+  onMarqueeSelect?: (rect: MarqueeRect) => void;
+  snapToGrid?: boolean;
 };
 
 export const useBoardCanvasInteractions = ({
@@ -33,11 +66,16 @@ export const useBoardCanvasInteractions = ({
   updateShapesLocally,
   emitCursorMove,
   setLaserStrokes,
+  emitLaserStroke,
   onTextCreated,
   drawingRef,
+  onMarqueeSelect,
+  snapToGrid = false,
 }: UseBoardCanvasInteractionsArgs) => {
   const [zoom, setZoom] = useState(1);
   const [viewport, setViewport] = useState({ x: 0, y: 0 });
+  const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
+  const marqueeStart = useRef<{ x: number; y: number } | null>(null);
 
   const isDrawing = useRef(false);
   const isPanning = useRef(false);
@@ -49,8 +87,10 @@ export const useBoardCanvasInteractions = ({
   const viewportStart = useRef({ x: 0, y: 0 });
   const draftShapeId = useRef<string | null>(null);
   const laserDraftId = useRef<string | null>(null);
-  const laserTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const laserTimers = useRef<Map<string, number>>(new Map());
   const lastDrawPoint = useRef<{ x: number; y: number } | null>(null);
+  const pinchStart = useRef<{ distance: number; zoom: number; cx: number; cy: number } | null>(null);
+  const touchIds = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     selectedToolRef.current = selectedTool;
@@ -126,6 +166,24 @@ export const useBoardCanvasInteractions = ({
     const screenPointer = stage?.getPointerPosition();
     const isMiddleMouse = "button" in e.evt && e.evt.button === 1;
 
+    if ("touches" in e.evt) {
+      for (let i = 0; i < e.evt.touches.length; i++) {
+        touchIds.current.add(e.evt.touches[i].identifier);
+      }
+      if (e.evt.touches.length === 2) {
+        const t1 = e.evt.touches[0];
+        const t2 = e.evt.touches[1];
+        const distance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        pinchStart.current = {
+          distance,
+          zoom,
+          cx: (t1.clientX + t2.clientX) / 2,
+          cy: (t1.clientY + t2.clientY) / 2,
+        };
+        return;
+      }
+    }
+
     if ((isSpacePressed.current || isMiddleMouse) && screenPointer) {
       isPanning.current = true;
       isDrawing.current = false;
@@ -142,9 +200,16 @@ export const useBoardCanvasInteractions = ({
     const pointer = getWorldPointer(e);
     if (!pointer) return;
 
+    if (currentTool === "select") {
+      marqueeStart.current = pointer;
+      setMarqueeRect(null);
+      return;
+    }
+
     if (currentTool === "text") {
       const id = newShapeId();
-      const fontSize = 16;
+      const fontSize = useToolStore.getState().fontSize;
+      const fontFamily = useToolStore.getState().fontFamily;
 
       setShapes((prev) => [
         ...prev,
@@ -155,7 +220,7 @@ export const useBoardCanvasInteractions = ({
           y: pointer.y,
           text: "",
           fontSize,
-          fontFamily: "Arial",
+          fontFamily,
           color: colorRef.current,
           strokeWidth: 1,
         },
@@ -165,7 +230,7 @@ export const useBoardCanvasInteractions = ({
         x: pointer.x,
         y: pointer.y,
         fontSize,
-        fontFamily: "Arial",
+        fontFamily,
         color: colorRef.current,
       });
       return;
@@ -208,13 +273,13 @@ export const useBoardCanvasInteractions = ({
         ];
       }
 
-      if (currentTool === "line") {
+      if (currentTool === "line" || currentTool === "arrow") {
         return [
           ...prev,
           {
             id,
             type: "line",
-            tool: "line",
+            tool: currentTool as "line" | "arrow",
             points: [pointer.x, pointer.y],
             color: colorRef.current,
             strokeWidth: strokeWidthRef.current,
@@ -281,6 +346,16 @@ export const useBoardCanvasInteractions = ({
     const stage = e.target.getStage();
     const screenPointer = stage?.getPointerPosition();
 
+    if ("touches" in e.evt && e.evt.touches.length === 2 && pinchStart.current) {
+      const t1 = e.evt.touches[0];
+      const t2 = e.evt.touches[1];
+      const distance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const scale = distance / pinchStart.current.distance;
+      const newZoom = clampZoom(pinchStart.current.zoom * scale);
+      setZoom(newZoom);
+      return;
+    }
+
     if (isPanning.current && screenPointer) {
       const dx = screenPointer.x - panStart.current.x;
       const dy = screenPointer.y - panStart.current.y;
@@ -296,6 +371,18 @@ export const useBoardCanvasInteractions = ({
       emitCursorMove({ x: pointer.x, y: pointer.y });
     }
 
+    if (currentTool === "select" && marqueeStart.current && pointer) {
+      const mx = marqueeStart.current.x;
+      const my = marqueeStart.current.y;
+      setMarqueeRect({
+        x: Math.min(mx, pointer.x),
+        y: Math.min(my, pointer.y),
+        width: Math.abs(pointer.x - mx),
+        height: Math.abs(pointer.y - my),
+      });
+      return;
+    }
+
     if (!isDrawing.current) return;
     if (!pointer) return;
     const targetId = draftShapeId.current;
@@ -309,16 +396,26 @@ export const useBoardCanvasInteractions = ({
     lastDrawPoint.current = pointer;
 
     if (currentTool === "laser" && laserDraftId.current === targetId) {
-      setLaserStrokes((prev) =>
-        prev.map((stroke) =>
+      setLaserStrokes((prev) => {
+        const updated = prev.map((stroke) =>
           stroke.id === targetId
             ? {
                 ...stroke,
                 points: [...stroke.points, pointer.x, pointer.y],
               }
             : stroke
-        )
-      );
+        );
+        const current = updated.find((s) => s.id === targetId);
+        if (current && emitLaserStroke) {
+          emitLaserStroke({
+            id: current.id,
+            points: current.points,
+            color: current.color,
+            strokeWidth: current.strokeWidth,
+          });
+        }
+        return updated;
+      });
       return;
     }
 
@@ -390,10 +487,26 @@ export const useBoardCanvasInteractions = ({
     setZoom((prev) => clampZoom(prev + delta));
   };
 
+  const intersects = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) =>
+    a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
   const handlePointerUp = () => {
+    pinchStart.current = null;
+    touchIds.current.clear();
+
     const currentTool = useToolStore.getState().selected;
     if (isPanning.current) {
       isPanning.current = false;
+      return;
+    }
+
+    if (currentTool === "select" && marqueeStart.current) {
+      const rect = marqueeRect;
+      marqueeStart.current = null;
+      setMarqueeRect(null);
+      if (rect && (rect.width > 5 || rect.height > 5)) {
+        onMarqueeSelect?.(rect);
+      }
       return;
     }
 
@@ -402,6 +515,7 @@ export const useBoardCanvasInteractions = ({
     isDrawing.current = false;
     drawingRef.current = false;
     const laserId = laserDraftId.current;
+    const draftId = draftShapeId.current;
     draftShapeId.current = null;
     laserDraftId.current = null;
     lastDrawPoint.current = null;
@@ -411,7 +525,23 @@ export const useBoardCanvasInteractions = ({
         setLaserStrokes((prev) => prev.filter((stroke) => stroke.id !== laserId));
         laserTimers.current.delete(laserId);
       }, LASER_TTL_MS);
-      laserTimers.current.set(laserId, timer as unknown as NodeJS.Timeout);
+      laserTimers.current.set(laserId, timer);
+      return;
+    }
+
+    // Eraser: remove shapes intersected by the eraser stroke
+    if (currentTool === "eraser" && draftId) {
+      updateShapesLocally((prev) => {
+        const eraserShape = prev.find((s) => s.id === draftId);
+        if (!eraserShape || eraserShape.type !== "line") return prev.filter((s) => s.id !== draftId);
+        const eraserBounds = getAABB(eraserShape);
+        if (!eraserBounds) return prev.filter((s) => s.id !== draftId);
+        return prev.filter((s) => {
+          if (s.id === draftId) return false;
+          const bounds = getAABB(s);
+          return bounds ? !intersects(eraserBounds, bounds) : true;
+        });
+      });
       return;
     }
 
@@ -432,6 +562,8 @@ export const useBoardCanvasInteractions = ({
   };
 
   const updateShapePosition = (shapeId: string, x: number, y: number) => {
+    const snappedX = snapToGrid ? snap(x) : x;
+    const snappedY = snapToGrid ? snap(y) : y;
     updateShapesLocally((prev) =>
       prev.map((shape) => {
         if (shape.id !== shapeId) return shape;
@@ -441,8 +573,8 @@ export const useBoardCanvasInteractions = ({
 
           const startX = shape.points[0];
           const startY = shape.points[1];
-          const dx = x - startX;
-          const dy = y - startY;
+          const dx = snappedX - startX;
+          const dy = snappedY - startY;
 
           return {
             ...shape,
@@ -453,15 +585,15 @@ export const useBoardCanvasInteractions = ({
         if (shape.type === "rectangle") {
           return {
             ...shape,
-            x,
-            y,
+            x: snappedX,
+            y: snappedY,
           };
         }
 
         return {
           ...shape,
-          x,
-          y,
+          x: snappedX,
+          y: snappedY,
         };
       })
     );
@@ -479,5 +611,6 @@ export const useBoardCanvasInteractions = ({
     handleWheel,
     normalizeRect,
     updateShapePosition,
+    marqueeRect,
   };
 };

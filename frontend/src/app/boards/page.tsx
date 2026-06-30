@@ -9,6 +9,8 @@ import { useRouter } from "next/navigation";
 import { getBoards, toggleStarBoard, type BoardWithMembers } from "@/lib/api";
 import { toast } from "sonner";
 
+const PAGE_SIZE = 12;
+
 export default function BoardsPage() {
   const user = useUserStore((state) => state.user);
   const loading = useUserStore((state) => state.loading);
@@ -16,6 +18,11 @@ export default function BoardsPage() {
 
   const [filter, setFilter] = useState<BoardFilter>("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filter, search]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -23,18 +30,22 @@ export default function BoardsPage() {
     }
   }, [loading, user, router]);
 
-  const { data: boards, isLoading, refetch } = useQuery({
-    queryKey: ["boards", filter, search],
+  const { data: result, isLoading, refetch } = useQuery({
+    queryKey: ["boards", filter, search, page],
     enabled: Boolean(user),
     queryFn: async () => {
       try {
-        return await getBoards({ filter, search: search || undefined });
+        return await getBoards({ filter, search: search || undefined, skip: page * PAGE_SIZE, take: PAGE_SIZE });
       } catch {
         router.replace("/login");
-        return [];
+        return { boards: [], total: 0 };
       }
     },
   });
+
+  const boards = result?.boards ?? [];
+  const total = result?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const starMutation = useMutation({
     mutationFn: toggleStarBoard,
@@ -80,6 +91,40 @@ export default function BoardsPage() {
             onToggleStar={handleToggleStar}
             isStarred={isStarred}
           />
+          {totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                disabled={page === 0}
+                onClick={() => setPage((p) => p - 1)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setPage(i)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    i === page
+                      ? "bg-indigo-600 text-white"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => p + 1)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </main>
       </div>
     </div>

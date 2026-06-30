@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 import type { BoardWithMembers } from "@/lib/api";
+import { deleteBoard } from "@/lib/api";
 
 interface BoardGridProps {
   boards: BoardWithMembers[];
@@ -60,11 +61,17 @@ export const BoardGrid = ({ boards, onToggleStar, isStarred }: BoardGridProps) =
     createBoard.mutate({ title, thumbnailUrl: "" });
   };
 
+  const handleDelete = async (boardId: string) => {
+    await deleteBoard(boardId);
+    queryClient.invalidateQueries({ queryKey: ["boards"] });
+    toast.success("Board deleted");
+  };
+
   if (!boards.length) {
     return (
       <div className="flex flex-col items-center justify-center mt-24 text-center">
         <div className="h-24 w-24 rounded-3xl bg-gradient-to-br from-indigo-100 to-indigo-50 flex items-center justify-center mb-6 shadow-inner">
-          <span className="text-4xl">📋</span>
+          <span className="text-4xl font-bold text-indigo-300">B</span>
         </div>
 
         <h2 className="text-2xl font-bold text-slate-800 mb-2">
@@ -156,6 +163,7 @@ export const BoardGrid = ({ boards, onToggleStar, isStarred }: BoardGridProps) =
           key={board.id}
           board={board}
           onToggleStar={onToggleStar}
+          onDelete={handleDelete}
           isStarred={isStarred?.(board) ?? false}
         />
       ))}

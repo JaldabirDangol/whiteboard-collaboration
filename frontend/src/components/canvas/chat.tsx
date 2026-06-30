@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { acquireSocket, releaseSocket } from "@/lib/board-socket";
+import { toast } from "sonner";
 
 type ChatProps = {
   boardId: string;
@@ -38,13 +39,14 @@ export default function Chat({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [onlineCount, setOnlineCount] = useState(1);
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
+  const onlineCount = onlineIds.size;
 
   const socketRef = useRef<Socket | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const sortedMessages = useMemo(
-    () => [...messages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+    () => (Array.isArray(messages) ? [...messages] : []).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [messages]
   );
 
@@ -57,12 +59,12 @@ export default function Chat({
   useEffect(() => {
     let ignore = false;
 
-    const loadMessages = async () => {
+      const loadMessages = async () => {
       setLoading(true);
       try {
         const data = await getBoardMessages(boardId);
         if (!ignore) {
-          setMessages(data);
+          setMessages(Array.isArray(data) ? data : []);
         }
       } catch {
         if (!ignore) {
@@ -103,17 +105,25 @@ export default function Chat({
       setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
     };
 
-    const onUserOnline = () => {
-      setOnlineCount((prev) => prev + 1);
+    const onUserOnline = (payload: { userId?: string }) => {
+      const uid = payload?.userId;
+      if (!uid) return;
+      setOnlineIds((prev) => new Set(prev).add(uid));
     };
 
-    const onUserOffline = () => {
-      setOnlineCount((prev) => Math.max(1, prev - 1));
+    const onUserOffline = (payload: { userId?: string }) => {
+      const uid = payload?.userId;
+      if (!uid) return;
+      setOnlineIds((prev) => {
+        const next = new Set(prev);
+        next.delete(uid);
+        return next;
+      });
     };
 
     const onPresenceState = ({ userIds }: { boardId?: string; userIds?: string[] }) => {
       if (!Array.isArray(userIds)) return;
-      setOnlineCount(Math.max(1, new Set(userIds).size));
+      setOnlineIds(new Set(userIds));
     };
 
     socket.on("messageSent", onMessageSent);
@@ -150,7 +160,11 @@ export default function Chat({
     const canDelete = currentUserId && message.userId === currentUserId;
     if (!canDelete) return;
 
-    await deleteBoardMessage(message.id, boardId);
+    try {
+      await deleteBoardMessage(message.id, boardId);
+    } catch {
+      toast.error("Failed to delete message");
+    }
   };
 
   return (

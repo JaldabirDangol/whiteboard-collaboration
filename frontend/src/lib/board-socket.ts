@@ -29,8 +29,13 @@ export const acquireSocket = (): Socket => {
 export const releaseSocket = () => {
   refCount--;
   if (refCount <= 0) {
-    sharedSocket?.disconnect();
-    sharedSocket = null;
-    refCount = 0;
+    // Delay disconnect to allow re-acquire in same tick (handles StrictMode double-mount)
+    setTimeout(() => {
+      if (refCount <= 0 && sharedSocket) {
+        sharedSocket.disconnect();
+        sharedSocket = null;
+        refCount = 0;
+      }
+    }, 0);
   }
 };

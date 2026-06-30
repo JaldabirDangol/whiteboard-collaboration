@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { signup } from "@/lib/api";
+import { signup, login } from "@/lib/api";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useUserStore } from "@/store/useUserStore";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
@@ -13,6 +14,7 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const fetchCurrentUser = useUserStore((state) => state.fetchCurrentUser);
 
   const handleSignup = async () => {
     if (!email || !password) {
@@ -26,8 +28,10 @@ export default function SignupPage() {
     setLoading(true);
     try {
       await signup(email, password);
+      await login(email, password);
+      await fetchCurrentUser();
       toast.success("Account created successfully!");
-      router.push("/login");
+      router.push("/boards");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Signup failed. Please try again.";
       toast.error(errorMessage);

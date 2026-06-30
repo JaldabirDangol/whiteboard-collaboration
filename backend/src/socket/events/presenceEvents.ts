@@ -80,40 +80,64 @@ export const registerPresenceEvents = (io: Server, socket: Socket) => {
   })
 
   socket.on("presence:leave", ({ boardId }: { boardId: string }) => {
-    const userId = getSocketUserId(socket) ?? socket.id
-    socket.leave(boardId)
-    untrackOnline(boardId, userId)
+    try {
+      const userId = getSocketUserId(socket) ?? socket.id
+      socket.leave(boardId)
+      untrackOnline(boardId, userId)
 
-    if (activeBoardId === boardId) {
-      activeBoardId = null
+      if (activeBoardId === boardId) {
+        activeBoardId = null
+      }
+
+      socket.to(boardId).emit("presence:userOffline", {
+        userId,
+        status: "offline",
+      })
+    } catch (error) {
+      console.error("[presence:leave]", error)
     }
-
-    socket.to(boardId).emit("presence:userOffline", {
-      userId,
-      status: "offline",
-    })
   })
+
+  // Laser pointer strokes
+  socket.on("laser:stroke", ({ boardId, stroke }: { boardId: string; stroke: { id: string; points: number[]; color: string; strokeWidth: number } }) => {
+    try {
+      socket.to(boardId).emit("laser:stroke", {
+        stroke,
+        userId: getSocketUserId(socket) ?? socket.id,
+      });
+    } catch (error) {
+      console.error("[laser:stroke]", error);
+    }
+  });
 
   // Cursor movement
   socket.on("presence:cursorMove", async ({ boardId, position }: { boardId: string; position: { x: number; y: number } }) => {
-    const canSharePresence = await canAccessBoard(socket, boardId)
-    if (!canSharePresence) return
+    try {
+      const canSharePresence = await canAccessBoard(socket, boardId)
+      if (!canSharePresence) return
 
-    socket.to(boardId).emit("presence:cursorMove", {
-      userId: getSocketUserId(socket) ?? socket.id,
-      position,
-    })
+      socket.to(boardId).emit("presence:cursorMove", {
+        userId: getSocketUserId(socket) ?? socket.id,
+        position,
+      })
+    } catch (error) {
+      console.error("[presence:cursorMove]", error)
+    }
   })
 
   socket.on("disconnect", () => {
-    if (!activeBoardId) return
+    try {
+      if (!activeBoardId) return
 
-    const userId = getSocketUserId(socket) ?? socket.id
-    untrackOnline(activeBoardId, userId)
+      const userId = getSocketUserId(socket) ?? socket.id
+      untrackOnline(activeBoardId, userId)
 
-    socket.to(activeBoardId).emit("presence:userOffline", {
-      userId,
-      status: "offline",
-    })
+      socket.to(activeBoardId).emit("presence:userOffline", {
+        userId,
+        status: "offline",
+      })
+    } catch (error) {
+      console.error("[presence:disconnect]", error)
+    }
   })
 }

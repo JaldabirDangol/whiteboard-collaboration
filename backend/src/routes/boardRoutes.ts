@@ -26,6 +26,7 @@ boardRoutes.delete("/:id/objects/:objectId", checkBoardAccess("EDITOR"), objectC
 // Board Snapshots / Versioning
 boardRoutes.get("/:id/snapshots", checkBoardAccess("VIEWER"), objectController.getSnapshots);
 boardRoutes.get("/:id/snapshots/:snapshotId", checkBoardAccess("VIEWER"), objectController.getSnapshotById);
+boardRoutes.post("/:id/snapshots/:snapshotId/restore", checkBoardAccess("EDITOR"), objectController.restoreSnapshotAction);
 
 // Board Settings
 boardRoutes.get("/:id/settings", checkBoardAccess("VIEWER"), settingsController.getSettings);

@@ -2,19 +2,32 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
-import { Clock, MoreHorizontal, Star } from "lucide-react";
+import { Clock, MoreHorizontal, Star, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BoardWithMembers } from "@/lib/api";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 interface BoardCardProps {
   board: BoardWithMembers;
   onToggleStar?: (boardId: string) => void;
+  onDelete?: (boardId: string) => Promise<void>;
   isStarred?: boolean;
 }
 
-export const BoardCard = ({ board, onToggleStar, isStarred = false }: BoardCardProps) => {
+export const BoardCard = ({ board, onToggleStar, onDelete, isStarred = false }: BoardCardProps) => {
   const isValidUrl = board?.thumbnailUrl?.startsWith("/") || board?.thumbnailUrl?.startsWith("http");
   const [imgSrc, setImgSrc] = useState(isValidUrl ? board.thumbnailUrl : null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setImgSrc(isValidUrl ? board.thumbnailUrl : null);
@@ -36,7 +49,27 @@ export const BoardCard = ({ board, onToggleStar, isStarred = false }: BoardCardP
     return date.toLocaleDateString();
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await onDelete?.(board.id);
+    } finally {
+      setDeleting(false);
+      setConfirmOpen(false);
+      setMenuOpen(false);
+    }
+  };
+
+  // Close menu on click outside
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(false);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [menuOpen]);
+
   return (
+    <>
     <Link
       href={`/boards/${board.id}`}
       className="group relative flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-indigo-200 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
@@ -54,7 +87,7 @@ export const BoardCard = ({ board, onToggleStar, isStarred = false }: BoardCardP
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-indigo-50 flex items-center justify-center mb-2 shadow-inner">
-              <span className="text-2xl">🎨</span>
+              <span className="text-2xl font-bold text-indigo-300">A</span>
             </div>
             <span className="text-xs font-medium text-slate-400">No Preview</span>
           </div>
@@ -82,12 +115,29 @@ export const BoardCard = ({ board, onToggleStar, isStarred = false }: BoardCardP
           </button>
         )}
 
-        <button
-          className="absolute top-3 right-3 p-1.5 rounded-lg bg-white/90 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
-          onClick={(e) => e.preventDefault()}
-        >
-          <MoreHorizontal className="h-4 w-4 text-slate-500" />
-        </button>
+        <div className="absolute top-3 right-3">
+          <button
+            className="p-1.5 rounded-lg bg-white/90 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenuOpen((prev) => !prev);
+            }}
+          >
+            <MoreHorizontal className="h-4 w-4 text-slate-500" />
+          </button>
+          {menuOpen && onDelete && (
+            <div className="absolute right-0 top-9 z-50 w-36 rounded-xl border border-slate-200 bg-white py-1 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => { setConfirmOpen(true); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete board
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="p-4">
@@ -100,5 +150,30 @@ export const BoardCard = ({ board, onToggleStar, isStarred = false }: BoardCardP
         </div>
       </div>
     </Link>
+
+    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete board?</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete "{board.title}"? This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <DialogClose className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+            Cancel
+          </DialogClose>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 transition-colors disabled:opacity-60"
+          >
+            {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+            {deleting ? "Deleting..." : "Delete"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };

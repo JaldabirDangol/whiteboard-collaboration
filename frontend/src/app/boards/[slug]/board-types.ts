@@ -7,7 +7,7 @@ export type BoardShapeBase = {
 
 export type LineShape = BoardShapeBase & {
   type: "line";
-  tool: "pen" | "eraser" | "line";
+  tool: "pen" | "eraser" | "line" | "arrow";
   points: number[];
 };
 

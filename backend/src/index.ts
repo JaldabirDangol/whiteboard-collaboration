@@ -10,9 +10,12 @@ import messageRoutes from "./routes/messageRoute.js";
 import boardRoutes from "./routes/boardRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import commentRoutes from "./routes/commentRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
 import authRoutes from "./routes/authRoutes.js";
 import { initSocket } from "@/socket/index.js";
+import { persistAllActiveBoards } from "@/socket/events/boardEvent.js";
+import { getActiveBoardIds } from "@/socket/yjs.js";
 import cookieParser from "cookie-parser";
 import meRout from "@/routes/me.js";
 
@@ -71,6 +74,7 @@ app.use("/api/boards", authMiddleware, boardRoutes);
 app.use("/api/messages", authMiddleware, messageRoutes);
 app.use("/api/upload", authMiddleware, uploadRoutes);
 app.use("/api/comments", authMiddleware, commentRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
@@ -89,6 +93,8 @@ async function startServer() {
     const shutdown = async (signal: string) => {
       isReady = false;
       console.log(`Received ${signal}, shutting down...`);
+      console.log(`Persisting ${getActiveBoardIds().length} active Y.Docs...`);
+      await persistAllActiveBoards();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await prisma.$disconnect();
       process.exit(0);

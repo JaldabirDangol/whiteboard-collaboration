@@ -1,7 +1,6 @@
 import { Server, Socket } from "socket.io";
 import * as Y from "yjs";
-import { getYDoc } from "@/socket/yjs.js"
-import { logAction } from "@/lib/auditLog.js";
+import { getYDoc, destroyYDoc, getActiveBoardIds } from "@/socket/yjs.js"
 import {
   getBoardShapesFromDatabase,
   getBoardCurrentSnapshotVersion,
@@ -14,14 +13,52 @@ import {
   setBoardCurrentSnapshotVersion,
 } from "@/controllers/boards/boardServices.js";
 import { canAccessBoard, canEditBoard } from "@/socket/boardAccess.js";
+import { logAction } from "@/lib/auditLog.js";
 
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const persistCounters = new Map<string, number>();
+const roomMembers = new Map<string, Set<string>>();
 
 const SHAPES_KEY = "shapes";
 const CLIENT_UPDATE_ORIGIN = "client-update";
+const UNDO_REDO_ORIGIN = "undo-redo";
 const PERSIST_DEBOUNCE_MS = 500;
 const SNAPSHOT_INTERVAL = 5; // Save snapshot every N persists
+const YDOC_GC_DELAY_MS = 60_000; // 60s grace period before destroying Y.Doc
+
+const trackRoomJoin = (boardId: string, socketId: string) => {
+  if (!roomMembers.has(boardId)) {
+    roomMembers.set(boardId, new Set());
+  }
+  roomMembers.get(boardId)!.add(socketId);
+};
+
+const trackRoomLeave = (boardId: string, socketId: string) => {
+  const members = roomMembers.get(boardId);
+  if (!members) return;
+  members.delete(socketId);
+  if (members.size === 0) {
+    roomMembers.delete(boardId);
+    persistCounters.delete(boardId);
+    // Schedule Y.Doc destruction after grace period
+    setTimeout(() => {
+      // Re-check: someone might have re-joined in the grace window
+      if (!roomMembers.has(boardId)) {
+        destroyYDoc(boardId);
+      }
+    }, YDOC_GC_DELAY_MS);
+  }
+};
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const validateBoardId = (boardId: unknown, socket: Socket): boardId is string => {
+  if (typeof boardId !== "string" || !UUID_REGEX.test(boardId)) {
+    socket.emit("error", { message: "Invalid board ID" });
+    return false;
+  }
+  return true;
+};
 
 const toUint8 = (value: unknown): Uint8Array => {
   if (value instanceof Uint8Array) return value;
@@ -97,8 +134,6 @@ const hydrateDocFromPersistence = async (boardId: string, doc: Y.Doc) => {
 const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string, forceSnapshot = false) => {
   try {
     const shapes = parseShapesFromYDoc(doc);
-    console.log(`[board:persist] Saving ${shapes.length} shapes for board ${boardId}, userId: ${userId}`);
-    console.log("[board:persist] Shape types:", shapes.map((shape: Record<string, unknown>) => shape.type));
 
     // Save snapshot only every N persists (or on forced flush like board:leave/disconnect)
     const count = (persistCounters.get(boardId) ?? 0) + 1;
@@ -110,7 +145,6 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
     // Save shapes to DB - use system as fallback userId if not provided
     const finalUserId = userId || "system";
     const savedCount = await replaceBoardShapes(boardId, finalUserId, shapes as Record<string, unknown>[]);
-    console.log(`[board:persist] Saved ${savedCount} shapes to DB for board ${boardId}`);
   } catch (error) {
     console.error("[board:persist] immediate persist failed", { boardId, error });
   }
@@ -119,8 +153,6 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
 const debouncedPersist = (boardId: string, doc: Y.Doc, userId?: string) => {
   const existing = persistTimers.get(boardId);
   if (existing) clearTimeout(existing);
-
-  console.log(`[debouncedPersist] Set timer for board ${boardId}, will save in ${PERSIST_DEBOUNCE_MS}ms`);
 
   persistTimers.set(
     boardId,
@@ -132,14 +164,12 @@ const debouncedPersist = (boardId: string, doc: Y.Doc, userId?: string) => {
 };
 
 export const registerBoardEvents = (io: Server, socket: Socket) => {
-  let activeBoardId: string | null = null;
+  const joinedBoards = new Set<string>();
 
   socket.on("board:join", async (boardId: string) => {
     try {
-      // Guard: skip if already joined this board on this socket
-      if (activeBoardId === boardId) {
-        return;
-      }
+      if (!validateBoardId(boardId, socket)) return;
+      if (joinedBoards.has(boardId)) return;
 
       const canAccess = await canAccessBoard(socket, boardId);
       if (!canAccess) {
@@ -147,12 +177,9 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         return;
       }
 
-      if (activeBoardId && activeBoardId !== boardId) {
-        socket.leave(activeBoardId);
-      }
-
-      activeBoardId = boardId;
+      joinedBoards.add(boardId);
       socket.join(boardId);
+      trackRoomJoin(boardId, socket.id);
       const doc = getYDoc(boardId);
       await hydrateDocFromPersistence(boardId, doc);
 
@@ -167,284 +194,165 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         userId: socket.data.user?.id ?? socket.id,
       });
     } catch (error) {
+      console.error("[board:join]", error);
       socket.emit("error", { message: "Failed to load board" });
     }
   });
 
   // 2. Continuous Sync: The "Holy Grail" event
   socket.on("yjs:update", async ({ boardId, update }: { boardId: string, update: unknown }) => {
-    console.log("[yjs:update] Received from client, boardId:", boardId, "update length:", Array.isArray(update) ? update.length : "N/A");
-
-    const canEdit = await canEditBoard(socket, boardId);
-    console.log("[yjs:update] canEdit:", canEdit, "userId:", socket.data.user?.id);
-
-    if (!canEdit) {
-      socket.emit("board:forbidden", {
-        boardId,
-        message: "You need editor access to modify this board",
-      });
-      return;
-    }
-
-    const doc = getYDoc(boardId);
-    const normalizedUpdate = toUint8(update);
-    if (normalizedUpdate.length === 0) {
-      console.log("[yjs:update] Empty update, skipping");
-      return;
-    }
-
-    // Apply the change to the server's version of the doc
-    Y.applyUpdate(doc, normalizedUpdate, CLIENT_UPDATE_ORIGIN);
-    console.log("[yjs:update] Applied update to Y.Doc");
-
-    const docShapes = parseShapesFromYDoc(doc);
-    console.log("[yjs:update] Shapes in doc:", docShapes.length, docShapes.map((shape: Record<string, unknown>) => shape.type));
-
-    // Broadcast that specific change to everyone else in the room
-    socket.to(boardId).emit("yjs:update", Array.from(normalizedUpdate));
-
-    // Trigger debounced persist
-    debouncedPersist(boardId, doc, socket.data.user?.id);
-    console.log("[yjs:update] Triggered debounced persist");
-  });
-
-  // ── Explicit object-level events ──
-
-  socket.on("board:draw", async (payload: {
-    boardId: string;
-    type: string;
-    data: Record<string, unknown>;
-    objectId: string;
-  }) => {
-    const { boardId, type, data, objectId } = payload;
-    const canEdit = await canEditBoard(socket, boardId);
-    if (!canEdit) {
-      socket.emit("board:forbidden", { boardId, message: "You need editor access to draw" });
-      return;
-    }
-
-    const userId = socket.data.user?.id;
-    if (!userId) return;
-
     try {
-      // Sync into Y.Doc — DB persistence happens via debounced persist
-      const doc = getYDoc(boardId);
-      const shapes = parseShapesFromYDoc(doc);
-      shapes.push({ ...data, id: objectId, type });
-      doc.getMap<string>("board").set(SHAPES_KEY, JSON.stringify(shapes));
+      if (!validateBoardId(boardId, socket)) return;
+      const canEdit = await canEditBoard(socket, boardId);
 
-      socket.to(boardId).emit("board:draw:broadcast", {
-        objectId,
-        type,
-        data,
-        userId,
-      });
-
-      socket.to(boardId).emit("board:history:update", {
-        boardId,
-        action: "draw",
-        objectId,
-      });
-
-      await logAction({
-        boardId,
-        userId,
-        action: "object.created",
-        metadata: { objectId, type },
-      });
-
-      io.to(boardId).emit("board:activity", {
-        action: "object.created",
-        userId,
-        metadata: { objectId, type },
-      });
-
-      debouncedPersist(boardId, doc, userId);
-    } catch (error) {
-      console.error("[board:draw]", error);
-    }
-  });
-
-  socket.on("board:update-object", async (payload: {
-    boardId: string;
-    objectId: string;
-    data: Record<string, unknown>;
-  }) => {
-    const { boardId, objectId, data } = payload;
-    const canEdit = await canEditBoard(socket, boardId);
-    if (!canEdit) {
-      socket.emit("board:forbidden", { boardId, message: "You need editor access to update" });
-      return;
-    }
-
-    try {
-      // Sync into Y.Doc — DB persistence happens via debounced persist
-      const doc = getYDoc(boardId);
-      const shapes = parseShapesFromYDoc(doc);
-      const idx = shapes.findIndex((s: Record<string, unknown>) => s.id === objectId);
-      if (idx !== -1) {
-        shapes[idx] = { ...shapes[idx], ...data };
-        doc.getMap<string>("board").set(SHAPES_KEY, JSON.stringify(shapes));
+      if (!canEdit) {
+        socket.emit("board:forbidden", {
+          boardId,
+          message: "You need editor access to modify this board",
+        });
+        return;
       }
 
-      socket.to(boardId).emit("board:update-object:broadcast", {
-        objectId,
-        data,
-        userId: socket.data.user?.id,
-      });
-
-      socket.to(boardId).emit("board:history:update", {
-        boardId,
-        action: "update",
-        objectId,
-      });
-
-      await logAction({
-        boardId,
-        userId: socket.data.user?.id ?? "system",
-        action: "object.updated",
-        metadata: { objectId },
-      });
-
-      io.to(boardId).emit("board:activity", {
-        action: "object.updated",
-        userId: socket.data.user?.id,
-        metadata: { objectId },
-      });
-
-      debouncedPersist(boardId, doc, socket.data.user?.id);
-    } catch (error) {
-      console.error("[board:update-object]", error);
-    }
-  });
-
-  socket.on("board:delete-object", async (payload: {
-    boardId: string;
-    objectId: string;
-  }) => {
-    const { boardId, objectId } = payload;
-    const canEdit = await canEditBoard(socket, boardId);
-    if (!canEdit) {
-      socket.emit("board:forbidden", { boardId, message: "You need editor access to delete" });
-      return;
-    }
-
-    try {
-      // Sync into Y.Doc — DB persistence happens via debounced persist
       const doc = getYDoc(boardId);
-      const shapes = parseShapesFromYDoc(doc);
-      const filtered = shapes.filter((s: Record<string, unknown>) => s.id !== objectId);
-      doc.getMap<string>("board").set(SHAPES_KEY, JSON.stringify(filtered));
+      const normalizedUpdate = toUint8(update);
+      if (normalizedUpdate.length === 0) {
+        return;
+      }
 
-      socket.to(boardId).emit("board:delete-object:broadcast", {
-        objectId,
-        userId: socket.data.user?.id,
-      });
+      // Apply the change to the server's version of the doc
+      Y.applyUpdate(doc, normalizedUpdate, CLIENT_UPDATE_ORIGIN);
 
-      socket.to(boardId).emit("board:history:update", {
-        boardId,
-        action: "delete",
-        objectId,
-      });
+      // Broadcast that specific change to everyone else in the room
+      socket.to(boardId).emit("yjs:update", Array.from(normalizedUpdate));
 
-      await logAction({
-        boardId,
-        userId: socket.data.user?.id ?? "system",
-        action: "object.deleted",
-        metadata: { objectId },
-      });
-
-      io.to(boardId).emit("board:activity", {
-        action: "object.deleted",
-        userId: socket.data.user?.id,
-        metadata: { objectId },
-      });
-
+      // Trigger debounced persist
       debouncedPersist(boardId, doc, socket.data.user?.id);
     } catch (error) {
-      console.error("[board:delete-object]", error);
+      console.error(`[yjs:update] error for board ${boardId}:`, error);
+      socket.emit("board:error", {
+        message: "Failed to apply update",
+      });
     }
   });
 
   socket.on("board:undo", async ({ boardId }: { boardId: string }) => {
-    const canEdit = await canEditBoard(socket, boardId);
-    if (!canEdit) {
-      socket.emit("board:forbidden", {
+    try {
+      if (!validateBoardId(boardId, socket)) return;
+      const canEdit = await canEditBoard(socket, boardId);
+      if (!canEdit) {
+        socket.emit("board:forbidden", {
+          boardId,
+          message: "You need editor access to modify this board",
+        });
+        return;
+      }
+
+      const pendingTimer = persistTimers.get(boardId);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        persistTimers.delete(boardId);
+      }
+
+      const latestSnapshot = await getLatestBoardSnapshot(boardId);
+      if (!latestSnapshot) return;
+
+      let currentVersion = await getBoardCurrentSnapshotVersion(boardId);
+      if (!currentVersion) {
+        currentVersion = latestSnapshot.version;
+        await setBoardCurrentSnapshotVersion(boardId, currentVersion);
+      }
+
+      const previousSnapshot = await getSnapshotBeforeVersion(boardId, currentVersion);
+      if (!previousSnapshot) return;
+
+      const shapes = extractShapesFromSnapshot(previousSnapshot);
+      const doc = getYDoc(boardId);
+
+      // DB first — if this fails, abort without corrupting Y.Doc
+      await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
+      await setBoardCurrentSnapshotVersion(boardId, previousSnapshot.version);
+
+      doc.transact(() => {
+        applyShapesToDoc(doc, shapes);
+      }, UNDO_REDO_ORIGIN);
+
+      logAction({
         boardId,
-        message: "You need editor access to modify this board",
+        userId: socket.data.user?.id ?? "system",
+        action: "board:undo",
+        metadata: { version: previousSnapshot.version },
+      }).catch(() => {});
+
+      const state = Y.encodeStateAsUpdate(doc);
+      io.to(boardId).emit("board:state", Array.from(state));
+    } catch (error) {
+      console.error(`[board:undo] error for board ${boardId}:`, error);
+      socket.emit("board:error", {
+        message: "Undo failed due to a server error",
       });
-      return;
     }
-
-    const pendingTimer = persistTimers.get(boardId);
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      persistTimers.delete(boardId);
-    }
-
-    const latestSnapshot = await getLatestBoardSnapshot(boardId);
-    if (!latestSnapshot) return;
-
-    let currentVersion = await getBoardCurrentSnapshotVersion(boardId);
-    if (!currentVersion) {
-      currentVersion = latestSnapshot.version;
-      await setBoardCurrentSnapshotVersion(boardId, currentVersion);
-    }
-
-    const previousSnapshot = await getSnapshotBeforeVersion(boardId, currentVersion);
-    if (!previousSnapshot) return;
-
-    const shapes = extractShapesFromSnapshot(previousSnapshot);
-    const doc = getYDoc(boardId);
-    applyShapesToDoc(doc, shapes);
-
-    await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
-    await setBoardCurrentSnapshotVersion(boardId, previousSnapshot.version);
-
-    const state = Y.encodeStateAsUpdate(doc);
-    io.to(boardId).emit("board:state", Array.from(state));
   });
 
   socket.on("board:redo", async ({ boardId }: { boardId: string }) => {
-    const canEdit = await canEditBoard(socket, boardId);
-    if (!canEdit) {
-      socket.emit("board:forbidden", {
+    try {
+      if (!validateBoardId(boardId, socket)) return;
+      const canEdit = await canEditBoard(socket, boardId);
+      if (!canEdit) {
+        socket.emit("board:forbidden", {
+          boardId,
+          message: "You need editor access to modify this board",
+        });
+        return;
+      }
+
+      const pendingTimer = persistTimers.get(boardId);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        persistTimers.delete(boardId);
+      }
+
+      const latestSnapshot = await getLatestBoardSnapshot(boardId);
+      if (!latestSnapshot) return;
+
+      let currentVersion = await getBoardCurrentSnapshotVersion(boardId);
+      if (!currentVersion) {
+        currentVersion = latestSnapshot.version;
+        await setBoardCurrentSnapshotVersion(boardId, currentVersion);
+      }
+
+      const nextSnapshot = await getSnapshotAfterVersion(boardId, currentVersion);
+      if (!nextSnapshot) return;
+
+      const shapes = extractShapesFromSnapshot(nextSnapshot);
+      const doc = getYDoc(boardId);
+
+      // DB first — if this fails, abort without corrupting Y.Doc
+      await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
+      await setBoardCurrentSnapshotVersion(boardId, nextSnapshot.version);
+
+      doc.transact(() => {
+        applyShapesToDoc(doc, shapes);
+      }, UNDO_REDO_ORIGIN);
+
+      logAction({
         boardId,
-        message: "You need editor access to modify this board",
+        userId: socket.data.user?.id ?? "system",
+        action: "board:redo",
+        metadata: { version: nextSnapshot.version },
+      }).catch(() => {});
+
+      const state = Y.encodeStateAsUpdate(doc);
+      io.to(boardId).emit("board:state", Array.from(state));
+    } catch (error) {
+      console.error(`[board:redo] error for board ${boardId}:`, error);
+      socket.emit("board:error", {
+        message: "Redo failed due to a server error",
       });
-      return;
     }
-
-    const pendingTimer = persistTimers.get(boardId);
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      persistTimers.delete(boardId);
-    }
-
-    const latestSnapshot = await getLatestBoardSnapshot(boardId);
-    if (!latestSnapshot) return;
-
-    let currentVersion = await getBoardCurrentSnapshotVersion(boardId);
-    if (!currentVersion) {
-      currentVersion = latestSnapshot.version;
-      await setBoardCurrentSnapshotVersion(boardId, currentVersion);
-    }
-
-    const nextSnapshot = await getSnapshotAfterVersion(boardId, currentVersion);
-    if (!nextSnapshot) return;
-
-    const shapes = extractShapesFromSnapshot(nextSnapshot);
-    const doc = getYDoc(boardId);
-    applyShapesToDoc(doc, shapes);
-
-    await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
-    await setBoardCurrentSnapshotVersion(boardId, nextSnapshot.version);
-
-    const state = Y.encodeStateAsUpdate(doc);
-    io.to(boardId).emit("board:state", Array.from(state));
   });
 
   socket.on("board:leave", async (boardId: string) => {
+    if (!validateBoardId(boardId, socket)) return;
     // Cancel any pending debounced persist and flush immediately
     const pendingTimer = persistTimers.get(boardId);
     if (pendingTimer) {
@@ -456,9 +364,8 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
     await persistBoardStateNow(boardId, doc, socket.data.user?.id, true);
 
     socket.leave(boardId);
-    if (activeBoardId === boardId) {
-      activeBoardId = null;
-    }
+    trackRoomLeave(boardId, socket.id);
+    joinedBoards.delete(boardId);
 
     socket.to(boardId).emit("board:userLeft", {
       userId: socket.data.user?.id ?? socket.id,
@@ -466,20 +373,36 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
   });
 
   socket.on("disconnect", async () => {
-    if (!activeBoardId) return;
+    const boardIds = Array.from(joinedBoards);
+    joinedBoards.clear();
 
-    // Cancel any pending debounced persist and flush immediately
-    const pendingTimer = persistTimers.get(activeBoardId);
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      persistTimers.delete(activeBoardId);
+    for (const boardId of boardIds) {
+      const pendingTimer = persistTimers.get(boardId);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        persistTimers.delete(boardId);
+      }
+
+      const doc = getYDoc(boardId);
+      await persistBoardStateNow(boardId, doc, socket.data.user?.id, true);
+
+      trackRoomLeave(boardId, socket.id);
+      socket.to(boardId).emit("board:userLeft", {
+        userId: socket.data.user?.id ?? socket.id,
+      });
     }
-
-    const doc = getYDoc(activeBoardId);
-    await persistBoardStateNow(activeBoardId, doc, socket.data.user?.id, true);
-
-    socket.to(activeBoardId).emit("board:userLeft", {
-      userId: socket.data.user?.id ?? socket.id,
-    });
   });
+};
+
+export const persistAllActiveBoards = async () => {
+  const boardIds = getActiveBoardIds();
+  for (const boardId of boardIds) {
+    const timer = persistTimers.get(boardId);
+    if (timer) {
+      clearTimeout(timer);
+      persistTimers.delete(boardId);
+    }
+    const doc = getYDoc(boardId);
+    await persistBoardStateNow(boardId, doc, "system", true);
+  }
 };

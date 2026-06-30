@@ -19,20 +19,26 @@ export const createMessage = async (data: {
   })
 }
 
-export const getMessagesByBoard = async (boardId: string) => {
-  return prisma.message.findMany({
-    where: { boardId },
-    orderBy: { createdAt: "asc" },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
+export const getMessagesByBoard = async (boardId: string, skip?: number, take?: number) => {
+  const [messages, total] = await Promise.all([
+    prisma.message.findMany({
+      where: { boardId },
+      orderBy: { createdAt: "asc" },
+      skip,
+      take,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
         },
       },
-    },
-  })
+    }),
+    prisma.message.count({ where: { boardId } }),
+  ]);
+  return { messages, total };
 }
 
 export const getMessageById = async (id: string) => {

@@ -1,8 +1,9 @@
 import * as Y from "yjs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
+import { toast } from "sonner";
 import { acquireSocket, releaseSocket } from "@/lib/board-socket";
-import type { BoardShape, RemoteCursor } from "./board-types";
+import type { BoardShape, LaserStroke, RemoteCursor } from "./board-types";
 import {
   LOCAL_ORIGIN,
   REMOTE_ORIGIN,
@@ -30,8 +31,11 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
   const [shapes, setShapes] = useState<BoardShape[]>([]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
+  const [remoteLaserStrokes, setRemoteLaserStrokes] = useState<LaserStroke[]>([]);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [serverReadOnly, setServerReadOnly] = useState(false);
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
+  const hasRemoteDataRef = useRef(false);
 
   const setShapesWithCache = useCallback((value: React.SetStateAction<BoardShape[]>) => {
     setShapes((prev) => (typeof value === "function" ? (value as (prev: BoardShape[]) => BoardShape[])(prev) : value));
@@ -58,6 +62,12 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     });
   }, [persistShapes, setShapesWithCache]);
 
+  const emitLaserStroke = useCallback((stroke: { id: string; points: number[]; color: string; strokeWidth: number }) => {
+    const socket = socketRef.current;
+    if (!socket) return;
+    socket.emit("laser:stroke", { boardId, stroke });
+  }, [boardId]);
+
   const emitCursorMove = useCallback((position: { x: number; y: number }) => {
     const socket = socketRef.current;
     if (!socket) return;
@@ -82,40 +92,28 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     return true;
   }, [boardId, serverReadOnly]);
 
-  // Load shapes from REST API - run when persistedShapes changes
-  // This ensures we have shapes even if Yjs socket hasn't synced properly
+  // Load shapes from REST API — only bootsrap Yjs if no socket data arrived yet
   useEffect(() => {
-    console.log("[persistShapes] Loading shapes from REST, count:", persistedShapes?.length || 0);
-
-    if (!persistedShapes || persistedShapes.length === 0) {
-      console.log("[persistShapes] No shapes from REST");
-      return;
-    }
+    if (!persistedShapes || persistedShapes.length === 0) return;
 
     const doc = docRef.current;
     const yBoard = yBoardRef.current;
     const next = normalizeShapesForClient(persistedShapes as unknown[]);
-    console.log("[persistShapes] Normalized shapes:", next.length);
+
+    // If we already received data via socket, don't overwrite with REST
+    if (hasRemoteDataRef.current) return;
 
     if (doc && yBoard) {
-      // Check what's currently in Yjs
       const existingShapes = yBoard.get(SHAPES_KEY);
-      console.log("[persistShapes] Current Yjs shapes:", existingShapes ? "has data" : "empty");
-
-      // Always sync REST data to Yjs if we have shapes
-      doc.transact(() => {
-        yBoard.set(SHAPES_KEY, JSON.stringify(next));
-      }, REMOTE_ORIGIN);
+      if (!existingShapes) {
+        doc.transact(() => {
+          yBoard.set(SHAPES_KEY, JSON.stringify(next));
+        }, REMOTE_ORIGIN);
+      }
     }
 
-    // Update React state
     setShapesWithCache((prev) => {
-      // If we already have shapes and they're the same count, don't overwrite
-      if (prev.length > 0 && prev.length === next.length) {
-        console.log("[persistShapes] Already has shapes, skipping");
-        return prev;
-      }
-      console.log("[persistShapes] Setting shapes:", next.length);
+      if (prev.length > 0 && prev.length === next.length) return prev;
       return next;
     });
   }, [persistedShapes]);
@@ -142,11 +140,11 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
     const onDocUpdate = (update: Uint8Array, origin: unknown) => {
       if (origin !== LOCAL_ORIGIN) return;
-      console.log("[yjs:update] Emitting update to server, boardId:", boardId, "update length:", update.length);
       socket.emit("yjs:update", { boardId, update: Array.from(update) });
     };
 
     const onInit = ({ yjsState }: { yjsState: unknown }) => {
+      hasRemoteDataRef.current = true;
       const update = toUint8(yjsState);
       if (update.length === 0) return;
       Y.applyUpdate(doc, update, REMOTE_ORIGIN);
@@ -154,6 +152,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     };
 
     const onUpdate = (rawUpdate: unknown) => {
+      hasRemoteDataRef.current = true;
       const update = toUint8(rawUpdate);
       if (update.length === 0) return;
       Y.applyUpdate(doc, update, REMOTE_ORIGIN);
@@ -161,10 +160,23 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     };
 
     const onState = (rawUpdate: unknown) => {
+      hasRemoteDataRef.current = true;
       const update = toUint8(rawUpdate);
       if (update.length === 0) return;
       Y.applyUpdate(doc, update, REMOTE_ORIGIN);
       applySnapshot();
+    };
+
+    const onLaserStroke = ({ stroke, userId: incomingUserId }: { stroke: LaserStroke; userId?: string }) => {
+      if (!stroke || !incomingUserId) return;
+      if (userIdRef.current && incomingUserId === userIdRef.current) return;
+
+      setRemoteLaserStrokes((prev) => [...prev, { ...stroke, createdAt: Date.now() }]);
+
+      // Auto-remove after 1.5s (local laser TTL is 1s)
+      setTimeout(() => {
+        setRemoteLaserStrokes((prev) => prev.filter((s) => s.id !== stroke.id));
+      }, 1500);
     };
 
     const onCursorMove = ({ userId: incomingUserId, position }: { userId?: string; position?: { x: number; y: number } }) => {
@@ -197,14 +209,44 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       setForbiddenMessage(message || "You only have viewer access on this board");
     };
 
+    const onBoardError = ({ message }: { message?: string }) => {
+      console.error("[board:error]", message);
+      toast.error(message || "An unexpected error occurred on the board");
+    };
+
+    const onBoardDeleted = () => {
+      window.location.href = "/boards";
+    };
+
+    const onUserOnline = (payload: { userId?: string }) => {
+      const uid = payload?.userId;
+      if (!uid) return;
+      setOnlineUserIds((prev) => new Set(prev).add(uid));
+    };
+
+    const onUserOffline = (payload: { userId?: string }) => {
+      const uid = payload?.userId;
+      if (!uid) return;
+      setOnlineUserIds((prev) => {
+        const next = new Set(prev);
+        next.delete(uid);
+        return next;
+      });
+    };
+
+    const onPresenceState = ({ userIds }: { boardId?: string; userIds?: string[] }) => {
+      if (!Array.isArray(userIds)) return;
+      setOnlineUserIds(new Set(userIds));
+    };
+
     const joinRoom = () => {
       socket.emit("board:join", boardId);
       socket.emit("presence:join", { boardId });
     };
 
     const onConnect = () => {
-      console.log("[board:socket] Connected, socketId:", socket.id);
-      // Re-join on initial connect AND any reconnect
+      setServerReadOnly(false);
+      setForbiddenMessage(null);
       joinRoom();
     };
 
@@ -219,9 +261,14 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     socket.on("yjs:update", onUpdate);
     socket.on("board:state", onState);
     socket.on("board:forbidden", onBoardForbidden);
+    socket.on("board:error", onBoardError);
+    socket.on("board:deleted", onBoardDeleted);
+    socket.on("laser:stroke", onLaserStroke);
     socket.on("presence:cursorMove", onCursorMove);
     socket.on("board:userLeft", onUserLeft);
-    socket.on("presence:userOffline", onUserLeft);
+    socket.on("presence:userOffline", onUserOffline);
+    socket.on("presence:userOnline", onUserOnline);
+    socket.on("presence:state", onPresenceState);
 
     // If already connected (shared socket), join immediately
     if (socket.connected) {
@@ -236,9 +283,14 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       socket.off("yjs:update", onUpdate);
       socket.off("board:state", onState);
       socket.off("board:forbidden", onBoardForbidden);
+      socket.off("board:error", onBoardError);
+      socket.off("board:deleted", onBoardDeleted);
+      socket.off("laser:stroke", onLaserStroke);
       socket.off("presence:cursorMove", onCursorMove);
       socket.off("board:userLeft", onUserLeft);
-      socket.off("presence:userOffline", onUserLeft);
+      socket.off("presence:userOffline", onUserOffline);
+      socket.off("presence:userOnline", onUserOnline);
+      socket.off("presence:state", onPresenceState);
       doc.off("update", onDocUpdate);
       releaseSocket();
       doc.destroy();
@@ -273,37 +325,16 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     };
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const socket = socketRef.current;
-      if (!socket) return;
-
-      const modifier = event.ctrlKey || event.metaKey;
-      if (!modifier) return;
-
-      const key = event.key.toLowerCase();
-      if (key === "z" && !event.shiftKey) {
-        event.preventDefault();
-        socket.emit("board:undo", { boardId });
-      }
-
-      if (key === "y" || key === "r" || (key === "z" && event.shiftKey)) {
-        event.preventDefault();
-        socket.emit("board:redo", { boardId });
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [boardId]);
-
   return {
     shapes,
     setShapes: setShapesWithCache,
     remoteCursors,
+    remoteLaserStrokes,
+    onlineUserIds,
     persistShapes,
     updateShapesLocally,
     emitCursorMove,
+    emitLaserStroke,
     emitHistoryEvent,
     serverReadOnly,
     forbiddenMessage,

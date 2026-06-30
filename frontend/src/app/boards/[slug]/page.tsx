@@ -1,9 +1,10 @@
 "use client";
 
 import type { Stage as KonvaStage } from "konva/lib/Stage";
-import type { KonvaEventObject } from "konva/lib/Node";
+import type { Node as KonvaNode, KonvaEventObject } from "konva/lib/Node";
+import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
+import { Arrow, Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import { Minus, Plus } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
@@ -13,14 +14,15 @@ import { useToolStore } from "@/store/useToolStore";
 import { apiUrl } from "@/constant";
 import { getBoardDetails, getPersistedBoardShapes, joinBoard, shareBoard, uploadBoardImage, getUserByEmail, getCommentCountsByBoard } from "@/lib/api";
 import { toast } from "sonner";
-import type { BoardShape, ImageShape, LaserStroke, RectShape } from "./board-types";
-import { newShapeId, normalizeShapesForClient } from "./board-shape-utils";
+import type { BoardShape, CircleShape, EllipseShape, ImageShape, LaserStroke, RectShape, TextShape } from "./board-types";
+import { newShapeId, normalizeShapesForClient, serializeShapesToSvg } from "./board-shape-utils";
 import { AVATAR_COLORS, getInitials, getStoredProfile } from "./board-profile-utils";
 import BoardTopBar from "./board-top-bar";
 import BoardRightPanel from "./board-right-panel";
 import BoardMobileChat from "./board-mobile-chat";
 import { useBoardRealtime } from "./use-board-realtime";
-import { useBoardCanvasInteractions } from "./use-board-canvas-interactions";
+import { useBoardCanvasInteractions, getAABB } from "./use-board-canvas-interactions";
+import { useConnectionStatus } from "@/lib/use-connection-status";
 
 export default function Page() {
   const params = useParams();
@@ -36,10 +38,8 @@ export default function Page() {
   const boardWrapRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const stageRef = useRef<KonvaStage | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const shapeRefs = useRef<Map<string, any>>(new Map());
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const transformerRef = useRef<any>(null);
+  const shapeRefs = useRef<Map<string, KonvaNode>>(new Map());
+  const transformerRef = useRef<KonvaTransformer>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [stageSize, setStageSize] = useState({ width: 1, height: 1 });
@@ -47,6 +47,7 @@ export default function Page() {
   const [selectedShapeIds, setSelectedShapeIds] = useState<Set<string>>(new Set());
   const selectedShapeIdsRef = useRef(selectedShapeIds);
   selectedShapeIdsRef.current = selectedShapeIds;
+  const clipboardRef = useRef<BoardShape[]>([]);
   const commentTargetShapeId = selectedShapeIds.size === 1 ? Array.from(selectedShapeIds)[0] : null;
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -55,10 +56,27 @@ export default function Page() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
   const [shareRole, setShareRole] = useState<"EDITOR" | "VIEWER">("VIEWER");
+  const connectionStatus = useConnectionStatus();
   const [chatOpen, setChatOpen] = useState(false);
   const [activeTopTab, setActiveTopTab] = useState<"Files" | "Canvas" | "Export" | "History">("Canvas");
   const [rightPanelTab, setRightPanelTab] = useState<"activity" | "chat" | "comments">("chat");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
   const [draftDisplayName, setDraftDisplayName] = useState("");
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      boardWrapRef.current?.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
   const [draftAvatarColor, setDraftAvatarColor] = useState(AVATAR_COLORS[0]);
   const [laserStrokes, setLaserStrokes] = useState<LaserStroke[]>([]);
 const [editingTextId, setEditingTextId] = useState<string | null>(null);
@@ -90,7 +108,10 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     persistShapes,
     updateShapesLocally,
     emitCursorMove,
+    emitLaserStroke,
     emitHistoryEvent,
+    remoteLaserStrokes,
+    onlineUserIds,
     serverReadOnly,
     forbiddenMessage,
     drawingRef,
@@ -104,18 +125,35 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     () => boardDetails?.members?.find((member) => member.userId === user?.id) ?? null,
     [boardDetails?.members, user?.id]
   );
-  const canEditBoard = (currentMembership?.role === "ADMIN" || currentMembership?.role === "EDITOR") && !serverReadOnly;
+  const canEditBoard = currentMembership?.role === "ADMIN" || currentMembership?.role === "EDITOR";
   const shapesRef = useRef(shapes);
   shapesRef.current = shapes;
+  const shapeVersionRef = useRef(0);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canEditBoardRef = useRef(canEditBoard);
   canEditBoardRef.current = canEditBoard;
   const editingTextIdRef = useRef(editingTextId);
   editingTextIdRef.current = editingTextId;
 
+  // Track shape version for auto-save indicator
+  useEffect(() => {
+    if (shapeVersionRef.current > 0 && shapes.length > 0) {
+      setSaveStatus("saving");
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => setSaveStatus("saved"), 1500);
+    }
+    shapeVersionRef.current++;
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [shapes]);
+
   const {
     zoom,
     setZoom,
     viewport,
+    setViewport,
     clampZoom,
     handlePointerDown,
     handlePointerMove,
@@ -123,6 +161,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     handleWheel,
     normalizeRect,
     updateShapePosition,
+    marqueeRect,
   } = useBoardCanvasInteractions({
     selectedTool,
     canEdit: canEditBoard,
@@ -132,10 +171,22 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     updateShapesLocally,
     emitCursorMove,
     setLaserStrokes,
+    emitLaserStroke,
     drawingRef,
+    snapToGrid: showGrid,
     onTextCreated: (shapeId, shapeData) => {
       setEditingTextId(shapeId);
       spawnTextarea(shapeId, "", shapeData);
+    },
+    onMarqueeSelect: (rect) => {
+      const ids: string[] = [];
+      for (const shape of renderedShapes) {
+        const bounds = getAABB(shape);
+        if (bounds && rect.x < bounds.x + bounds.w && rect.x + rect.width > bounds.x && rect.y < bounds.y + bounds.h && rect.y + rect.height > bounds.y) {
+          ids.push(shape.id);
+        }
+      }
+      setSelectedShapeIds(new Set(ids));
     },
   });
 
@@ -270,6 +321,13 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     anchor.download = `${boardDetails?.title || "board"}.png`;
     anchor.click();
     toast.success("Board exported as PNG");
+  };
+
+  const handleExportSvg = () => {
+    const svgContent = serializeShapesToSvg(shapes, boardDetails?.title || "Whiteboard");
+    const blob = new Blob([svgContent], { type: "image/svg+xml;charset=utf-8" });
+    downloadBlob(blob, `${boardDetails?.title || "board"}.svg`);
+    toast.success("Board exported as SVG");
   };
 
   const handleFileImport = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -520,19 +578,30 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     container.appendChild(el);
     textareaRef.current = el;
 
-    el.focus();
-    el.select();
+    // Use rAF to wait for React re-render before focusing
+    requestAnimationFrame(() => {
+      el.focus();
+      el.select();
+    });
 
     el.addEventListener("pointerdown", (e) => e.stopPropagation());
 
+    let cancelled = false;
+
     el.addEventListener("blur", () => {
+      if (cancelled) return;
       finishTextEditing(el.value);
-      cleanupTextarea(el);
+      // cleanupTextarea intentionally NOT called here —
+      // finishTextEditing calls setEditingTextId(null), which
+      // triggers the cleanup effect (line 901) to remove the DOM node.
+      // Calling it here would cause a NotFoundError when spawnTextarea
+      // removes an existing textarea and synchronously fires blur.
     });
 
     el.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         e.preventDefault();
+        cancelled = true;
         cancelTextEditing(el.value);
         cleanupTextarea(el);
       }
@@ -545,7 +614,11 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
   };
 
   const cleanupTextarea = (el: HTMLTextAreaElement) => {
-    if (el.parentNode) el.parentNode.removeChild(el);
+    try {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    } catch {
+      // Ignore — may be called re-entrantly during blur propagation
+    }
     if (textareaRef.current === el) textareaRef.current = null;
   };
 
@@ -585,8 +658,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
   // Handle transform end for Transformer
   const handleTransformEnd = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tr = transformerRef.current as any;
+    const tr = transformerRef.current;
     if (!tr) return;
 
     const ids = selectedShapeIdsRef.current;
@@ -649,8 +721,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
   // Attach/detach Transformer nodes
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tr = transformerRef.current as any;
+    const tr = transformerRef.current;
     if (!tr || selectedShapeIds.size === 0) {
       tr?.nodes([]);
       tr?.getLayer()?.batchDraw();
@@ -666,7 +737,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
       nodes.push(node);
     });
 
-    tr.nodes(nodes);
+    tr.nodes(nodes as never[]);
     tr.getLayer()?.batchDraw();
   }, [selectedShapeIds, renderedShapes]);
 
@@ -706,6 +777,114 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
         e.preventDefault();
         requestHistoryEvent("redo");
+      }
+
+      const offsetShape = (s: BoardShape, dx: number, dy: number): BoardShape => {
+        if (s.type === "line") return { ...s, id: newShapeId(), points: s.points.map((v, i) => v + (i % 2 === 0 ? dx : dy)) };
+        return { ...s, id: newShapeId(), x: (s as RectShape | CircleShape | EllipseShape | TextShape | ImageShape).x + dx, y: (s as RectShape | CircleShape | EllipseShape | TextShape | ImageShape).y + dy };
+      };
+
+      // Duplicate (Ctrl+D)
+      if ((e.ctrlKey || e.metaKey) && e.key === "d" && ids.size > 0) {
+        e.preventDefault();
+        const shapesArr = shapesRef.current;
+        const newShapes = shapesArr.filter((s) => ids.has(s.id)).map((s) => offsetShape(s, 20, 20));
+        updateShapesLocally((prev) => [...prev, ...newShapes]);
+        const newIds = new Set(newShapes.map((s) => s.id));
+        setSelectedShapeIds(newIds);
+      }
+
+      // Copy (Ctrl+C)
+      if ((e.ctrlKey || e.metaKey) && e.key === "c" && ids.size > 0) {
+        e.preventDefault();
+        clipboardRef.current = shapesRef.current.filter((s) => ids.has(s.id));
+      }
+
+      // Paste (Ctrl+V)
+      if ((e.ctrlKey || e.metaKey) && e.key === "v" && clipboardRef.current.length > 0) {
+        e.preventDefault();
+        const pasted = clipboardRef.current.map((s) => offsetShape(s, 30, 30));
+        updateShapesLocally((prev) => [...prev, ...pasted]);
+        const newIds = new Set(pasted.map((s) => s.id));
+        setSelectedShapeIds(newIds);
+      }
+
+      // Z-order: bring to front (Ctrl+Shift+])
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "]" && ids.size > 0) {
+        e.preventDefault();
+        updateShapesLocally((prev) => {
+          const moved = prev.filter((s) => ids.has(s.id));
+          const rest = prev.filter((s) => !ids.has(s.id));
+          return [...rest, ...moved];
+        });
+      }
+
+      // Z-order: send to back (Ctrl+Shift+[)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "[" && ids.size > 0) {
+        e.preventDefault();
+        updateShapesLocally((prev) => {
+          const moved = prev.filter((s) => ids.has(s.id));
+          const rest = prev.filter((s) => !ids.has(s.id));
+          return [...moved, ...rest];
+        });
+      }
+
+      // Select All (Ctrl+A)
+      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+        e.preventDefault();
+        const allIds = new Set(shapesRef.current.map((s) => s.id));
+        setSelectedShapeIds(allIds);
+      }
+
+      // Alignment shortcuts (Ctrl+Shift+L/R/C/H/V)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && ids.size > 1) {
+        const shapesArr = shapesRef.current.filter((s) => ids.has(s.id));
+        const nonLine = shapesArr.filter((s) => s.type !== "line");
+        if (nonLine.length < 2) return;
+
+        const getBox = (s: BoardShape) => {
+          if (s.type === "rectangle" || s.type === "image") return { x: (s as RectShape).x, y: (s as RectShape).y, w: (s as RectShape).width, h: (s as RectShape).height };
+          if (s.type === "circle") return { x: (s as CircleShape).x - (s as CircleShape).radius, y: (s as CircleShape).y - (s as CircleShape).radius, w: (s as CircleShape).radius * 2, h: (s as CircleShape).radius * 2 };
+          if (s.type === "ellipse") return { x: (s as EllipseShape).x - (s as EllipseShape).radiusX, y: (s as EllipseShape).y - (s as EllipseShape).radiusY, w: (s as EllipseShape).radiusX * 2, h: (s as EllipseShape).radiusY * 2 };
+          if (s.type === "text") return { x: (s as TextShape).x, y: (s as TextShape).y, w: (s as TextShape).text.length * (s as TextShape).fontSize * 0.6 + 10, h: (s as TextShape).fontSize + 10 };
+          return null;
+        };
+
+        if (e.key === "l") {
+          e.preventDefault();
+          const minX = Math.min(...nonLine.map((s) => getBox(s)!.x));
+          updateShapesLocally((prev) => prev.map((s) => ids.has(s.id) && s.type !== "line" ? { ...s, x: minX } : s));
+        }
+        if (e.key === "r") {
+          e.preventDefault();
+          const shapesWithBox = nonLine.map((s) => ({ s, box: getBox(s)! }));
+          updateShapesLocally((prev) => prev.map((s) => {
+            if (!ids.has(s.id) || s.type === "line") return s;
+            const box = getBox(s);
+            if (!box) return s;
+            const maxRight = Math.max(...shapesWithBox.map(({ box }) => box.x + box.w));
+            if (s.type === "rectangle" || s.type === "image") return { ...s, x: maxRight - box.w } as BoardShape;
+            if (s.type === "circle") return { ...s, x: maxRight - box.w + (s as CircleShape).radius } as BoardShape;
+            if (s.type === "ellipse") return { ...s, x: maxRight - box.w + (s as EllipseShape).radiusX } as BoardShape;
+            return s;
+          }));
+        }
+        if (e.key === "c") {
+          e.preventDefault();
+          const shapesWithBox = nonLine.map((s) => ({ s, box: getBox(s)! }));
+          const totalW = Math.max(...shapesWithBox.map(({ box }) => box.x + box.w)) - Math.min(...shapesWithBox.map(({ box }) => box.x));
+          const center = Math.min(...shapesWithBox.map(({ box }) => box.x)) + totalW / 2;
+          updateShapesLocally((prev) => prev.map((s) => {
+            if (!ids.has(s.id) || s.type === "line") return s;
+            const box = getBox(s);
+            if (!box) return s;
+            if (s.type === "rectangle" || s.type === "image") return { ...s, x: center - box.w / 2 } as BoardShape;
+            if (s.type === "circle") return { ...s, x: center } as BoardShape;
+            if (s.type === "ellipse") return { ...s, x: center } as BoardShape;
+            if (s.type === "text") return { ...s, x: center - box.w / 2 } as BoardShape;
+            return s;
+          }));
+        }
       }
     };
 
@@ -762,8 +941,10 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
       />
 
       <BoardTopBar
+        boardId={id}
         boardTitle={boardDetails?.title || "Project Draft"}
         isViewOnly={!canEditBoard}
+        saveStatus={saveStatus}
         topTabs={topTabs}
         activeTopTab={activeTopTab}
         onTopTabClick={onTopTabClick}
@@ -791,6 +972,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
         exportOpen={exportOpen}
         onExportOpenChange={setExportOpen}
         onExportImage={handleExportImage}
+        onExportSvg={handleExportSvg}
         onExportJson={handleExportJson}
         historyOpen={historyOpen}
         onHistoryOpenChange={setHistoryOpen}
@@ -810,6 +992,10 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
         onHelpOpenChange={setHelpOpen}
         avatarColor={avatarColor}
         avatarInitials={avatarInitials}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+        showGrid={showGrid}
+        onToggleGrid={() => setShowGrid((prev) => !prev)}
       />
 
       <div className="relative flex min-h-0 flex-1">
@@ -831,6 +1017,15 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
             />
           </div>
 
+          {showGrid && (
+            <div
+              className="pointer-events-none absolute inset-0 z-10"
+              style={{
+                backgroundImage: "linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px)",
+                backgroundSize: "20px 20px",
+              }}
+            />
+          )}
           <Stage
             ref={stageRef}
             style={{ touchAction: "none" }}
@@ -847,7 +1042,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
             onWheel={handleWheel}
               onMouseDownCapture={(e: KonvaEventObject<MouseEvent>) => {
                 if (!e.evt.shiftKey) {
-                  if ((e.target as any).nodeType === "Stage") {
+                  if ((e.target as KonvaNode).nodeType === "Stage") {
                     setSelectedShapeIds(new Set());
                   }
                 }
@@ -866,7 +1061,46 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                   {renderedShapes.map((shape) => {
                   const shapeCommentCount = commentCounts?.[shape.id] ?? 0;
                   if (shape.type === "line") {
-                    return (
+                    const isArrow = shape.tool === "arrow";
+                    return isArrow ? (
+                      <Arrow
+                        key={shape.id}
+                        id={shape.id}
+                        points={shape.points}
+                        stroke={shape.color}
+                        strokeWidth={shape.strokeWidth}
+                        pointerLength={10}
+                        pointerWidth={8}
+                        fill={shape.color}
+                        lineCap="round"
+                        lineJoin="round"
+                        draggable={canEditBoard}
+                        onClick={(e) => {
+                          e.cancelBubble = true;
+                          handleShapeSelect(shape.id, e.evt.shiftKey);
+                        }}
+                        onTap={() => {
+                          handleShapeSelect(shape.id, false);
+                        }}
+                        onDragEnd={(event) => {
+                          if (!canEditBoard) return;
+                          const pos = event.target.position();
+                          updateShapesLocally((prev) =>
+                            prev.map((s) => {
+                              if (s.id !== shape.id || s.type !== "line") return s;
+                              return {
+                                ...s,
+                                points: s.points.map((p, i) => p + (i % 2 === 0 ? pos.x : pos.y)),
+                              };
+                            })
+                          );
+                          event.target.position({ x: 0, y: 0 });
+                        }}
+                        shadowEnabled={isShapeSelected(shape.id)}
+                        shadowColor="#6366f1"
+                        shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
+                      />
+                    ) : (
                       <Line
                         key={shape.id}
                         id={shape.id}
@@ -881,7 +1115,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                           e.cancelBubble = true;
                           handleShapeSelect(shape.id, e.evt.shiftKey);
                         }}
-                        onTap={(e) => {
+                        onTap={() => {
                           handleShapeSelect(shape.id, false);
                         }}
                         onDragEnd={(event) => {
@@ -939,8 +1173,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                         shadowEnabled={isShapeSelected(shape.id)}
                         shadowColor="#6366f1"
                         shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        ref={(node: any) => {
+                        ref={(node) => {
                           if (node) shapeRefs.current.set(shape.id, node);
                           else shapeRefs.current.delete(shape.id);
                         }}
@@ -992,8 +1225,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                       shadowEnabled={isShapeSelected(shape.id)}
                       shadowColor="#6366f1"
                       shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      ref={(node: any) => {
+                      ref={(node) => {
                         if (node) shapeRefs.current.set(shape.id, node);
                         else shapeRefs.current.delete(shape.id);
                       }}
@@ -1029,8 +1261,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                       shadowEnabled={isShapeSelected(shape.id)}
                       shadowColor="#6366f1"
                       shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      ref={(node: any) => {
+                      ref={(node) => {
                         if (node) shapeRefs.current.set(shape.id, node);
                         else shapeRefs.current.delete(shape.id);
                       }}
@@ -1069,8 +1300,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                       shadowEnabled={isShapeSelected(shape.id)}
                       shadowColor="#6366f1"
                       shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      ref={(node: any) => {
+                      ref={(node) => {
                         if (node) shapeRefs.current.set(shape.id, node);
                         else shapeRefs.current.delete(shape.id);
                       }}
@@ -1082,8 +1312,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
               })}
               {canEditBoard && selectedShapeIds.size > 0 && (
                 <Transformer
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  ref={transformerRef as any}
+                  ref={transformerRef}
                   rotateEnabled={false}
                   keepRatio={false}
                   enabledAnchors={[
@@ -1101,6 +1330,19 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                     return newBox;
                   }}
                   onTransformEnd={handleTransformEnd}
+                />
+              )}
+              {marqueeRect && (
+                <Rect
+                  x={marqueeRect.x}
+                  y={marqueeRect.y}
+                  width={marqueeRect.width}
+                  height={marqueeRect.height}
+                  stroke="#6366f1"
+                  strokeWidth={1 / zoom}
+                  dash={[6 / zoom, 4 / zoom]}
+                  fill="rgba(99, 102, 241, 0.08)"
+                  listening={false}
                 />
               )}
               {commentCounts ? renderedShapes.map((shape) => {
@@ -1145,7 +1387,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
             <Layer listening={false}>
               <Group x={viewport.x} y={viewport.y} scaleX={zoom} scaleY={zoom}>
-                {laserStrokes.map((stroke) => (
+                {[...laserStrokes, ...remoteLaserStrokes].map((stroke) => (
                   <Line
                     key={stroke.id}
                     points={stroke.points}
@@ -1178,7 +1420,79 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
             </Layer>
           </Stage>
 
+          {connectionStatus !== "connected" && (
+            <div className="pointer-events-auto absolute bottom-4 left-4 z-20 flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-3 py-1.5 shadow-sm backdrop-blur">
+              <span className={`inline-block h-2 w-2 rounded-full ${
+                connectionStatus === "connecting" ? "bg-amber-400 animate-pulse" :
+                connectionStatus === "error" ? "bg-red-500" :
+                "bg-slate-400"
+              }`} />
+              <span className="text-xs font-medium text-slate-600">
+                {connectionStatus === "connecting" ? "Connecting..." :
+                 connectionStatus === "error" ? "Connection failed" :
+                 "Disconnected"}
+              </span>
+              {connectionStatus === "error" && (
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="ml-1 text-xs text-indigo-600 hover:text-indigo-500 underline"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
           <div className="pointer-events-auto absolute bottom-4 right-4 z-20 flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur">
+            <button
+              type="button"
+              onClick={() => {
+                if (shapes.length === 0) { setZoom(1); setViewport({ x: 0, y: 0 }); return; }
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                for (const s of shapes) {
+                  if (s.type === "line") {
+                    for (let i = 0; i < s.points.length; i += 2) {
+                      if (s.points[i] < minX) minX = s.points[i];
+                      if (s.points[i + 1] < minY) minY = s.points[i + 1];
+                      if (s.points[i] > maxX) maxX = s.points[i];
+                      if (s.points[i + 1] > maxY) maxY = s.points[i + 1];
+                    }
+                  } else if (s.type === "circle") {
+                    if (s.x - s.radius < minX) minX = s.x - s.radius;
+                    if (s.y - s.radius < minY) minY = s.y - s.radius;
+                    if (s.x + s.radius > maxX) maxX = s.x + s.radius;
+                    if (s.y + s.radius > maxY) maxY = s.y + s.radius;
+                  } else if (s.type === "ellipse") {
+                    if (s.x - s.radiusX < minX) minX = s.x - s.radiusX;
+                    if (s.y - s.radiusY < minY) minY = s.y - s.radiusY;
+                    if (s.x + s.radiusX > maxX) maxX = s.x + s.radiusX;
+                    if (s.y + s.radiusY > maxY) maxY = s.y + s.radiusY;
+                  } else if (s.type === "text") {
+                    if (s.x < minX) minX = s.x;
+                    if (s.y < minY) minY = s.y;
+                    const tw = s.text.length * s.fontSize * 0.6 + 10;
+                    if (s.x + tw > maxX) maxX = s.x + tw;
+                    if (s.y + s.fontSize + 10 > maxY) maxY = s.y + s.fontSize + 10;
+                  } else {
+                    const shape = s as { x: number; y: number; width: number; height: number };
+                    if (shape.x < minX) minX = shape.x;
+                    if (shape.y < minY) minY = shape.y;
+                    if (shape.x + shape.width > maxX) maxX = shape.x + shape.width;
+                    if (shape.y + shape.height > maxY) maxY = shape.y + shape.height;
+                  }
+                }
+                const cw = maxX - minX || 1;
+                const ch = maxY - minY || 1;
+                const pad = 40;
+                const fitZoom = Math.min((stageSize.width - pad * 2) / cw, (stageSize.height - pad * 2) / ch, 2);
+                setZoom(Math.max(0.1, fitZoom));
+                setViewport({ x: (stageSize.width - cw * fitZoom) / 2 - minX * fitZoom, y: (stageSize.height - ch * fitZoom) / 2 - minY * fitZoom });
+              }}
+              className="grid h-7 w-7 place-items-center rounded-md text-xs font-bold text-slate-600 transition hover:bg-slate-100"
+              title="Fit to screen"
+            >
+              Fit
+            </button>
             <button
               type="button"
               onClick={() => setZoom((prev) => clampZoom(prev - 0.1))}
@@ -1211,6 +1525,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
           currentUserId={user?.id}
           selectedShapeId={commentTargetShapeId}
           shapeTypeMap={shapeTypeMap}
+          onlineUserIds={onlineUserIds}
         />
 
         <BoardMobileChat boardId={id} currentUserId={user?.id} chatOpen={chatOpen} onClose={() => setChatOpen(false)} />
@@ -1232,8 +1547,7 @@ const BoardImageShape = ({
   selected: boolean;
   onSelect: (shiftKey: boolean) => void;
   onDragEnd: (x: number, y: number) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getShapeNode?: (node: any) => void;
+  getShapeNode?: (node: KonvaNode | null) => void;
 }) => {
   const image = useImageElement(shape.url);
 

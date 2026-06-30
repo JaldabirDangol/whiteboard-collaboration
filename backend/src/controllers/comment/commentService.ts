@@ -36,20 +36,26 @@ export const getCommentsByShape = async (shapeId: string) => {
   })
 }
 
-export const getCommentsByBoard = async (boardId: string) => {
-  return prisma.comment.findMany({
-    where: { boardId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
+export const getCommentsByBoard = async (boardId: string, skip?: number, take?: number) => {
+  const [comments, total] = await Promise.all([
+    prisma.comment.findMany({
+      where: { boardId },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
         },
       },
-    },
-  })
+    }),
+    prisma.comment.count({ where: { boardId } }),
+  ]);
+  return { comments, total };
 }
 
 export const getCommentById = async (id: string) => {

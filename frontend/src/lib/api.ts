@@ -50,6 +50,36 @@ export async function logout() {
 }
 
 
+export async function forgotPassword(email: string) {
+  const res = await fetch(`${apiUrl}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Request failed");
+  }
+
+  return json;
+}
+
+export async function resetPassword(token: string, password: string) {
+  const res = await fetch(`${apiUrl}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Reset failed");
+  }
+
+  return json;
+}
+
 export async function getMe() {
   const res = await fetch(`${apiUrl}/auth/me`, {
     credentials: "include",
@@ -274,14 +304,23 @@ export type GetBoardsParams = {
   search?: string;
   sort?: "updatedAt" | "createdAt" | "title";
   order?: "asc" | "desc";
+  skip?: number;
+  take?: number;
 };
 
-export async function getBoards(params?: GetBoardsParams): Promise<BoardWithMembers[]> {
+export type GetBoardsResult = {
+  boards: BoardWithMembers[];
+  total: number;
+};
+
+export async function getBoards(params?: GetBoardsParams): Promise<GetBoardsResult> {
   const searchParams = new URLSearchParams();
   if (params?.filter) searchParams.set("filter", params.filter);
   if (params?.search) searchParams.set("search", params.search);
   if (params?.sort) searchParams.set("sort", params.sort);
   if (params?.order) searchParams.set("order", params.order);
+  if (params?.skip !== undefined) searchParams.set("skip", String(params.skip));
+  if (params?.take !== undefined) searchParams.set("take", String(params.take));
 
   const query = searchParams.toString();
   const res = await fetch(`${apiUrl}/boards/user${query ? `?${query}` : ""}`, {
@@ -469,6 +508,44 @@ export async function deleteComment(
   }
 }
 
+// ── Snapshots ──
+
+export type BoardSnapshot = {
+  id: string;
+  version: number;
+  createdAt: string;
+};
+
+export type BoardSnapshotFull = BoardSnapshot & {
+  data: { shapes: Record<string, unknown>[] };
+};
+
+export async function getBoardSnapshots(boardId: string): Promise<BoardSnapshot[]> {
+  const res = await fetch(`${apiUrl}/boards/${boardId}/snapshots`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load snapshots");
+  return res.json();
+}
+
+export async function getBoardSnapshotById(boardId: string, snapshotId: string): Promise<BoardSnapshotFull> {
+  const res = await fetch(`${apiUrl}/boards/${boardId}/snapshots/${snapshotId}`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load snapshot");
+  return res.json();
+}
+
+export async function restoreBoardSnapshot(boardId: string, snapshotId: string): Promise<{ message: string }> {
+  const res = await fetch(`${apiUrl}/boards/${boardId}/snapshots/${snapshotId}/restore`, {
+    method: "POST",
+    credentials: "include",
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error || "Failed to restore snapshot");
+  return json;
+}
+
 // ── Activity / Audit Logs ──
 
 export type BoardActivity = {
@@ -510,4 +587,42 @@ export async function removeBoardMember(boardId: string, userId: string): Promis
   }
 
   return json;
+}
+
+// ── Notifications ──
+
+export type BoardNotification = {
+  id: string;
+  userId: string;
+  boardId: string | null;
+  type: string;
+  message: string;
+  metadata: Record<string, unknown> | null;
+  readAt: string | null;
+  createdAt: string;
+  board?: { id: string; title: string } | null;
+};
+
+export async function getNotifications(): Promise<BoardNotification[]> {
+  const res = await fetch(`${apiUrl}/notifications`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load notifications");
+  return res.json();
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const res = await fetch(`${apiUrl}/notifications/${id}/read`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to mark notification as read");
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  const res = await fetch(`${apiUrl}/notifications/read-all`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to mark all as read");
 }

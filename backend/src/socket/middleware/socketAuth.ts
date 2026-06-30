@@ -11,7 +11,7 @@ const getTokenFromCookie = (cookieHeader?: string): string | null => {
   return decodeURIComponent(tokenCookie.slice("token=".length))
 }
 
-export const socketAuth = (socket: Socket, next: any) => {
+export const socketAuth = (socket: Socket, next: (err?: Error) => void) => {
   const authToken = socket.handshake.auth?.token
   const headerAuth = socket.handshake.headers.authorization
   const bearerToken = headerAuth?.startsWith("Bearer ")

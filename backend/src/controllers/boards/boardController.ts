@@ -12,7 +12,7 @@ export async function createBoard(req: Request, res: Response) {
     if (!userId) return res.status(400).json({ error: "User ID is required" });
     if(!req.body.title) return res.status(400).json({error:"title is required"})
 
-    let board = await prisma.board.findUnique({
+    let board = await prisma.board.findFirst({
       where:{
         title: req.body.title,
       }

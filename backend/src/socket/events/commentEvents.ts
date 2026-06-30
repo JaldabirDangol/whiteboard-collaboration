@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { canAccessBoard, getSocketUserId } from "@/socket/boardAccess.js";
+import { canAccessBoard, canEditBoard, getSocketUserId } from "@/socket/boardAccess.js";
 import { createComment, deleteComment } from "@/controllers/comment/commentService.js";
 
 export const registerCommentEvents = (io: Server, socket: Socket) => {
@@ -12,14 +12,19 @@ export const registerCommentEvents = (io: Server, socket: Socket) => {
     const userId = getSocketUserId(socket);
     if (!userId) return;
 
-    const hasAccess = await canAccessBoard(socket, boardId);
-    if (!hasAccess) {
-      socket.emit("comment:error", { message: "You do not have access to this board" });
+    const canEdit = await canEditBoard(socket, boardId);
+    if (!canEdit) {
+      socket.emit("comment:error", { message: "You need editor access to comment" });
       return;
     }
 
     if (!content || content.trim().length === 0) {
       socket.emit("comment:error", { message: "Comment content cannot be empty" });
+      return;
+    }
+
+    if (content.length > 5000) {
+      socket.emit("comment:error", { message: "Comment content must be under 5000 characters" });
       return;
     }
 

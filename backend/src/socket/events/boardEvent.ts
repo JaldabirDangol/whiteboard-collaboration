@@ -13,6 +13,7 @@ import {
   setBoardCurrentSnapshotVersion,
 } from "@/controllers/boards/boardServices.js";
 import { canAccessBoard, canEditBoard } from "@/socket/boardAccess.js";
+import { getIO } from "@/socket/index.js";
 import { logAction } from "@/lib/auditLog.js";
 
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -142,9 +143,13 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
       await saveBoardSnapshot(boardId, { shapes });
     }
 
-    // Save shapes to DB - use system as fallback userId if not provided
-    const finalUserId = userId || "system";
-    const savedCount = await replaceBoardShapes(boardId, finalUserId, shapes as Record<string, unknown>[]);
+    const { orphanedComments } = await replaceBoardShapes(boardId, userId, shapes as Record<string, unknown>[]);
+    if (orphanedComments.length > 0) {
+      const io = getIO();
+      for (const { commentId, shapeId } of orphanedComments) {
+        io.to(boardId).emit("comment:removed", { commentId, shapeId });
+      }
+    }
   } catch (error) {
     console.error("[board:persist] immediate persist failed", { boardId, error });
   }
@@ -251,6 +256,9 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       if (pendingTimer) {
         clearTimeout(pendingTimer);
         persistTimers.delete(boardId);
+        // Flush current state before applying undo so the snapshot chain is intact
+        const doc = getYDoc(boardId);
+        await persistBoardStateNow(boardId, doc, socket.data.user?.id, true);
       }
 
       const latestSnapshot = await getLatestBoardSnapshot(boardId);
@@ -269,7 +277,10 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       const doc = getYDoc(boardId);
 
       // DB first — if this fails, abort without corrupting Y.Doc
-      await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
+      const { orphanedComments } = await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
+      for (const { commentId, shapeId } of orphanedComments) {
+        io.to(boardId).emit("comment:removed", { commentId, shapeId });
+      }
       await setBoardCurrentSnapshotVersion(boardId, previousSnapshot.version);
 
       doc.transact(() => {
@@ -309,6 +320,9 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       if (pendingTimer) {
         clearTimeout(pendingTimer);
         persistTimers.delete(boardId);
+        // Flush current state before applying redo so the snapshot chain is intact
+        const doc = getYDoc(boardId);
+        await persistBoardStateNow(boardId, doc, socket.data.user?.id, true);
       }
 
       const latestSnapshot = await getLatestBoardSnapshot(boardId);
@@ -327,7 +341,10 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       const doc = getYDoc(boardId);
 
       // DB first — if this fails, abort without corrupting Y.Doc
-      await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
+      const { orphanedComments } = await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
+      for (const { commentId, shapeId } of orphanedComments) {
+        io.to(boardId).emit("comment:removed", { commentId, shapeId });
+      }
       await setBoardCurrentSnapshotVersion(boardId, nextSnapshot.version);
 
       doc.transact(() => {

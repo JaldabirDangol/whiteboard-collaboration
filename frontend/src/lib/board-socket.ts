@@ -19,7 +19,7 @@ export const acquireSocket = (): Socket => {
   if (!sharedSocket) {
     sharedSocket = io(getSocketUrl(), {
       withCredentials: true,
-      transports: ["websocket"],
+      transports: ["websocket", "polling"],
     });
   }
   refCount++;

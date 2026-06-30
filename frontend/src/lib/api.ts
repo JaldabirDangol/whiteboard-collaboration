@@ -449,8 +449,8 @@ export async function getShapeComments(shapeId: string): Promise<BoardComment[]>
   return res.json();
 }
 
-export async function getBoardComments(boardId: string): Promise<BoardComment[]> {
-  const res = await fetch(`${apiUrl}/comments/board/${boardId}`, {
+export async function getBoardComments(boardId: string, take = 200): Promise<BoardComment[]> {
+  const res = await fetch(`${apiUrl}/comments/board/${boardId}?take=${take}`, {
     credentials: "include",
   });
 
@@ -458,7 +458,8 @@ export async function getBoardComments(boardId: string): Promise<BoardComment[]>
     throw new Error("Failed to load comments");
   }
 
-  return res.json();
+  const body = await res.json();
+  return Array.isArray(body) ? body : (body?.comments ?? []);
 }
 
 export async function createComment(
@@ -572,7 +573,8 @@ export async function getBoardActivity(boardId: string): Promise<BoardActivity[]
     throw new Error("Failed to load activity");
   }
 
-  return res.json();
+  const body = await res.json();
+  return Array.isArray(body) ? body : (body.logs ?? []);
 }
 
 export async function removeBoardMember(boardId: string, userId: string): Promise<{ message: string }> {

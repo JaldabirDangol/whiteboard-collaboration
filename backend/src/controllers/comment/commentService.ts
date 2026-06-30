@@ -1,23 +1,69 @@
 import { prisma } from "@/lib/prisma.js"
 
+// Resolve a client-side shape UUID to the actual DB Shape.id.
+// For newly-persisted shapes (after fix #2) the client UUID IS the Shape.id.
+// For older shapes they differ, so fall back to JSONB lookup via data->>'id'.
+const resolveShapeDbId = async (boardId: string, clientShapeId: string): Promise<string | null> => {
+  const direct = await prisma.shape.findUnique({
+    where: { id: clientShapeId },
+    select: { id: true },
+  });
+  if (direct) return direct.id;
+
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM "Shape"
+    WHERE "boardId" = ${boardId} AND data->>'id' = ${clientShapeId}
+    LIMIT 1
+  `;
+  return rows[0]?.id ?? null;
+};
+
 export const createComment = async (data: {
   boardId: string
   shapeId: string
   userId: string
   content: string
 }) => {
-  return prisma.comment.create({
-    data,
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      // Resolve client-side shapeId → actual DB Shape.id (they differ when shape was
+      // persisted with gen_random_uuid). For newly persisted shapes (fix #2) they match,
+      // but old shapes need the lookup via data->>'id'.
+      const dbShapeId = await resolveShapeDbId(data.boardId, data.shapeId);
+      if (!dbShapeId) {
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+          continue;
+        }
+        throw new Error("Shape not found in database");
+      }
+
+      return await prisma.comment.create({
+        data: {
+          boardId: data.boardId,
+          shapeId: dbShapeId,
+          userId: data.userId,
+          content: data.content,
         },
-      },
-    },
-  })
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+    } catch (err) {
+      const prismaErr = err as { code?: string };
+      if (prismaErr.code === "P2003" && attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 export const getCommentsByShape = async (shapeId: string) => {

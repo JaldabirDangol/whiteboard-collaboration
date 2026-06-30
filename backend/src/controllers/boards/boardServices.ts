@@ -228,37 +228,58 @@ export async function getBoardShapesFromDatabase(boardId: string) {
   });
 
   return shapes
-    .map((shape) => shape.data)
-    .filter((data) => typeof data === "object" && data !== null) as Record<string, unknown>[];
+    .map((shape) => {
+      const data = shape.data as Record<string, unknown> | null;
+      if (!data || typeof data !== "object") return null;
+      return { ...data, id: data.id ?? shape.id };
+    })
+    .filter((s) => s !== null) as Record<string, unknown>[];
 }
 
 export async function replaceBoardShapes(
   boardId: string,
-  userId: string,
+  userId: string | undefined,
   shapes: Record<string, unknown>[]
-) {
+): Promise<{ count: number; orphanedComments: { commentId: string; shapeId: string }[] }> {
   const valid = shapes.filter((s) => typeof s === "object" && s !== null);
   if (valid.length === 0) {
+    const orphanedComments = await prisma.comment.findMany({
+      where: { boardId },
+      select: { id: true, shapeId: true },
+    });
     await prisma.shape.deleteMany({ where: { boardId } });
-    return 0;
+    return { count: 0, orphanedComments };
   }
 
-  // Map incoming shape client-IDs for quick lookup
+  let resolvedUserId = userId;
+  if (!resolvedUserId) {
+    const board = await prisma.board.findUnique({ where: { id: boardId }, select: { creatorId: true } });
+    resolvedUserId = board?.creatorId;
+  }
+  if (!resolvedUserId) {
+    const member = await prisma.boardMember.findFirst({ where: { boardId }, select: { userId: true } });
+    resolvedUserId = member?.userId;
+  }
+  if (!resolvedUserId) {
+    return { count: 0, orphanedComments: [] };
+  }
+
   const incomingIds = new Set(valid.map((s) => s.id as string));
+  let orphanedComments: { commentId: string; shapeId: string }[] = [];
 
   await prisma.$transaction(async (tx) => {
-    // Fetch existing shapes and build clientId → dbId map
     const existing = await tx.shape.findMany({
       where: { boardId },
-      select: { id: true, data: true },
+      select: { id: true, data: true, userId: true },
     });
     const clientToDb = new Map<string, string>();
+    const existingDataByDbId = new Map<string, string>();
     for (const ex of existing) {
+      existingDataByDbId.set(ex.id, JSON.stringify(ex.data));
       const clientId = (ex.data as Record<string, unknown> | null)?.id as string | undefined;
       if (clientId) clientToDb.set(clientId, ex.id);
     }
 
-    // Delete shapes whose client IDs are no longer present
     const toDeleteIds = existing
       .filter((ex) => {
         const cid = (ex.data as Record<string, unknown> | null)?.id as string | undefined;
@@ -267,28 +288,48 @@ export async function replaceBoardShapes(
       .map((ex) => ex.id);
 
     if (toDeleteIds.length > 0) {
+      const affected = await tx.comment.findMany({
+        where: { shapeId: { in: toDeleteIds } },
+        select: { id: true, shapeId: true },
+      });
+      orphanedComments = affected.map((c) => ({ commentId: c.id, shapeId: c.shapeId }));
+
       await tx.shape.deleteMany({ where: { id: { in: toDeleteIds } } });
     }
 
-    // Upsert each incoming shape
-    for (const shape of valid) {
+    // Only upsert shapes whose data actually changed (skip identical to reduce write amp)
+    const changedShapes = valid.filter((shape) => {
       const dbId = clientToDb.get(shape.id as string);
-      const rowData = {
+      if (!dbId) return true;
+      return existingDataByDbId.get(dbId) !== JSON.stringify(shape);
+    });
+
+    if (changedShapes.length > 0) {
+      const valueRows = changedShapes.map((shape) => ({
+        id: clientToDb.get(shape.id as string) ?? shape.id as string,
         boardId,
-        userId,
+        userId: resolvedUserId!,
         type: toShapeType(shape.type),
-        data: shape as any,
-      };
+        // Strip redundant id from data (it's already Shape.id; storing it duplicates bytes)
+        data: JSON.stringify(Object.fromEntries(Object.entries(shape).filter(([k]) => k !== "id"))),
+      }));
 
-      if (dbId) {
-        await tx.shape.update({ where: { id: dbId }, data: rowData });
-      } else {
-        await tx.shape.create({ data: rowData });
-      }
+      const paramIndex = (i: number, offset: number) => i * 5 + offset + 1;
+
+      const valueStrings = valueRows
+        .map((_, i) => `($${paramIndex(i, 0)}::text, $${paramIndex(i, 1)}::uuid, $${paramIndex(i, 2)}::text, $${paramIndex(i, 3)}::"ShapeType", $${paramIndex(i, 4)}::jsonb, NOW(), NOW())`)
+        .join(",\n");
+
+      const params = valueRows.flatMap((r) => [r.id, r.boardId, r.userId, r.type, r.data]);
+
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "Shape" (id, "boardId", "userId", type, data, "createdAt", "updatedAt") VALUES ${valueStrings} ON CONFLICT (id) DO UPDATE SET "userId" = EXCLUDED."userId", type = EXCLUDED.type, data = EXCLUDED.data, "updatedAt" = NOW()`,
+        ...params,
+      );
     }
-  }, { timeout: 20_000 });
+  }, { timeout: 30_000 });
 
-  return valid.length;
+  return { count: changedShapes.length, orphanedComments };
 }
 
 export async function getLatestBoardSnapshot(boardId: string) {
@@ -324,7 +365,7 @@ export async function saveBoardSnapshot(boardId: string, data: unknown) {
         });
 
         return snapshot;
-      }, { timeout: 20_000 });
+      }, { timeout: 30_000 });
     } catch (err: unknown) {
       const prismaErr = err as { code?: string };
       if (prismaErr.code === "P2002" && attempt < 2) {

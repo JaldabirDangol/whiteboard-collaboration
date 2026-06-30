@@ -178,7 +178,7 @@ export default function ShapeComments({
             on a {typeLabel}
           </span>
         ) : null}
-        <p className="text-sm leading-relaxed">{comment.content}</p>
+        <p className="text-sm leading-relaxed">{comment.content.replace(/\s{3,}/g, " ").replace(/\n{3,}/g, "\n\n")}</p>
         {isMine ? (
           <button
             type="button"

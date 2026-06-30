@@ -268,6 +268,8 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
   };
 
   const requestHistoryEvent = (type: "undo" | "redo") => {
+    if (!boardDetails) return;
+
     if (!canEditBoard) {
       toast.error("You have viewer access. Editing actions are disabled.");
       return;
@@ -1365,6 +1367,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                   }
                   case "text": bx = shape.x + 40; by = shape.y - 6; break;
                   case "image": bx = shape.x + shape.width; by = shape.y; break;
+                  default: if ("x" in shape && typeof (shape as any).x === "number") { bx = (shape as any).x; by = (shape as any).y ?? 0; }
                 }
                 return (
                   <Group key={`badge-${shape.id}`} x={bx} y={by}>

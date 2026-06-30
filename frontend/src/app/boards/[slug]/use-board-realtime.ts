@@ -86,11 +86,9 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     const socket = socketRef.current;
     if (!socket) return false;
 
-    if (serverReadOnly) return false;
-
     socket.emit(type === "undo" ? "board:undo" : "board:redo", { boardId });
     return true;
-  }, [boardId, serverReadOnly]);
+  }, [boardId]);
 
   // Load shapes from REST API — only bootsrap Yjs if no socket data arrived yet
   useEffect(() => {
@@ -206,7 +204,9 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
     const onBoardForbidden = ({ message }: { message?: string }) => {
       setServerReadOnly(true);
-      setForbiddenMessage(message || "You only have viewer access on this board");
+      const msg = message || "You only have viewer access on this board";
+      setForbiddenMessage(msg);
+      toast.error(msg);
     };
 
     const onBoardError = ({ message }: { message?: string }) => {

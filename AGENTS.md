@@ -50,10 +50,33 @@ Postinstall hook auto-runs `prisma generate`.
 - **Tailwind v4**: PostCSS with `@tailwindcss/postcss` (no `tailwind.config.ts`).
 - **Canvas**: Konva `Stage` → `Layer` → shape components — no React DOM for drawing.
 - **Shape dedup**: Always dedupe shape arrays by `shape.id` before rendering (React key collisions).
+- **DB migrations**: 5 applied. Latest: `20260630165618_add_boardmember_user_cascade`.
+- **Socket transport**: `["websocket", "polling"]` — polling fallback prevents WS upgrade failures on first load.
+- **Comment sanitization**: Frontend collapses `\s{3,}` → `" "` and `\n{3,}` → `"\n\n"` at render time.
+- **Undo/redo persist flush**: Both handlers flush pending Y.Doc state to DB (`forceSnapshot=true`) before snapshot restore, preserving redo chain.
+- **BoardMember.userId**: `onDelete: Cascade` — membership auto-deleted when user is removed.
 - **Socket event naming**: `namespace:action` pattern (e.g. `board:join`, `presence:cursorMove`).
 
-## Known technical debt
+## Fixed debt
 
-- Write amplification: every `yjs:update` persists snapshot + rewrites all Shape rows
+- Write amplification: `replaceBoardShapes` skips unchanged shapes (compares serialized JSON before upserting)
+- FK mismatch: `Comment.shapeId` vs `Shape.id` — client-side UUIDs now used as DB IDs; `commentService` resolves via `findUnique` then `data->>'id'` fallback
+- Redundant `id` in `Shape.data`: stripped on write, restored on read
 
 See `frontend/CLAUDE.md` for full architecture reference (344 lines).
+
+## graphify
+
+`/graphify` builds a persistent knowledge graph from any path. Output lands in `graphify-out/`.
+
+| Command | What it does |
+|---------|-------------|
+| `/graphify` | Full pipeline on current dir |
+| `/graphify <path>` | Full pipeline on specific path |
+| `/graphify <path> --update` | Re-extract only new/changed files |
+| `/graphify query "<question>"` | BFS traversal on the graph |
+| `/graphify query "<question>" --dfs` | DFS trace follow one path |
+| `/graphify path "A" "B"` | Shortest path between two concepts |
+| `/graphify explain "Node"` | Explain a node and its connections |
+
+Outputs: `graphify-out/graph.html` (interactive), `graph.json` (raw data), `GRAPH_REPORT.md` (audit report).

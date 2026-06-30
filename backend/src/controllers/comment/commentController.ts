@@ -25,6 +25,10 @@ export const createComment = async (
       return res.status(400).json({ message: "Comment content cannot be empty" });
     }
 
+    if (content.length > 5000) {
+      return res.status(400).json({ message: "Comment content must be under 5000 characters" });
+    }
+
     if (!shapeId || typeof shapeId !== "string") {
       return res.status(400).json({ message: "Shape ID is required" });
     }

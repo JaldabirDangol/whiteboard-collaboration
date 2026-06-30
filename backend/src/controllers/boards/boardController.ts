@@ -209,8 +209,13 @@ export async function deleteBoard(req: Request, res: Response) {
       return res.status(403).json({ error: "Only board admins can delete this board" });
     }
 
-    const board = await boardService.deleteBoard(id as string);
+    const board = await boardService.getBoard(id as string);
+    if (!board) return res.status(404).json({ error: "Board not found" });
+
+    // Log BEFORE deleting — AuditLog.boardId FK references Board
     await logAction({ boardId: id as string, userId: actorUserId, action: "board.deleted", metadata: { title: board.title } });
+
+    await boardService.deleteBoard(id as string);
 
     // Notify connected users and clean up Y.Doc
     try {

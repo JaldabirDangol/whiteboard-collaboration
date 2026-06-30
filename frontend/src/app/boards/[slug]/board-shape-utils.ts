@@ -28,7 +28,9 @@ const coerceShape = (raw: unknown, index: number): BoardShape | null => {
   const typeRaw = typeof shape.type === "string" ? shape.type.toLowerCase() : "";
   const color = typeof shape.color === "string" && shape.color.trim() ? shape.color : "#000000";
   const strokeWidth = Math.max(1, toFiniteNumber(shape.strokeWidth, 2));
-  const tool = shape.tool === "eraser" ? "eraser" : "pen";
+  const fill = typeof shape.fill === "string" && shape.fill.trim() ? shape.fill : undefined;
+  const rawTool = shape.tool;
+  const tool: "pen" | "eraser" | "line" | "arrow" = typeof rawTool === "string" && ["pen", "eraser", "line", "arrow"].includes(rawTool) ? rawTool as "pen" | "eraser" | "line" | "arrow" : "pen";
   const id =
     typeof shape.id === "string" && shape.id.trim()
       ? shape.id.trim()
@@ -75,6 +77,7 @@ const coerceShape = (raw: unknown, index: number): BoardShape | null => {
       height: toFiniteNumber(shape.height, 0),
       color,
       strokeWidth,
+      fill,
     };
   }
 
@@ -88,6 +91,7 @@ const coerceShape = (raw: unknown, index: number): BoardShape | null => {
       radius,
       color,
       strokeWidth,
+      fill,
     };
   }
 
@@ -101,6 +105,7 @@ const coerceShape = (raw: unknown, index: number): BoardShape | null => {
       radiusY: Math.abs(toFiniteNumber(shape.radiusY, 30)),
       color,
       strokeWidth,
+      fill,
     };
   }
 

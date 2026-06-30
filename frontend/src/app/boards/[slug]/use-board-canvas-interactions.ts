@@ -424,11 +424,11 @@ export const useBoardCanvasInteractions = ({
         if (shape.id !== targetId) return shape;
 
         if (shape.type === "line") {
-          // For straight line tool, only use end points
-          if (shape.tool === "line") {
+          // For straight line/arrow: use start point from shape, end from pointer
+          if (shape.tool === "line" || shape.tool === "arrow") {
             return {
               ...shape,
-              points: [lastDrawPoint.current?.x ?? pointer.x, lastDrawPoint.current?.y ?? pointer.y, pointer.x, pointer.y],
+              points: [shape.points[0] ?? pointer.x, shape.points[1] ?? pointer.y, pointer.x, pointer.y],
             };
           }
           // For pen, keep adding points
@@ -545,7 +545,14 @@ export const useBoardCanvasInteractions = ({
       return;
     }
 
-    updateShapesLocally((prev) => prev);
+    // Discard single-point lines (dots from click without drag)
+    updateShapesLocally((prev) =>
+      prev.filter((s) => {
+        if (s.type !== "line") return true;
+        if (s.points.length >= 4) return true;
+        return false;
+      })
+    );
   };
 
   const normalizeRect = (shape: RectShape): RectShape => {

@@ -1,4 +1,5 @@
-import { Cog, HelpCircle, MessageSquareMore, Share2, X, Maximize, Minimize, RotateCcw, RotateCw } from "lucide-react";
+import { ArrowLeft, Cog, HelpCircle, MessageSquareMore, Share2, X, Maximize, Minimize, RotateCcw, RotateCw } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AVATAR_COLORS, getInitials } from "./board-profile-utils";
@@ -132,6 +133,13 @@ export default function BoardTopBar({
   return (
     <div className="z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur-sm px-3 md:px-4">
       <div className="flex min-w-0 items-center gap-3">
+        <Link
+          href="/boards"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+          title="Back to boards"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Link>
         <p className="truncate text-sm font-semibold text-slate-900">{boardTitle}</p>
         <span
           className={`hidden items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide md:inline-flex ${

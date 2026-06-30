@@ -70,77 +70,71 @@ export const BoardCard = ({ board, onToggleStar, onDelete, isStarred = false }: 
 
   return (
     <>
-    <Link
-      href={`/boards/${board.id}`}
-      className="group relative flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-indigo-200 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
-    >
-      <div className="relative h-40 w-full bg-gradient-to-br from-slate-50 to-slate-100">
-        {imgSrc ? (
-          <Image
-            src={imgSrc}
-            alt={board.title || "Board thumbnail"}
-            fill
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            className="object-cover"
-            onError={() => setImgSrc(null)}
-          />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-indigo-50 flex items-center justify-center mb-2 shadow-inner">
-              <span className="text-2xl font-bold text-indigo-300">A</span>
-            </div>
-            <span className="text-xs font-medium text-slate-400">No Preview</span>
-          </div>
-        )}
-
-        <div className="absolute inset-0 bg-gradient-to-t from-black/[0.02] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-
-        {onToggleStar && (
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              onToggleStar(board.id);
-            }}
-            className={cn(
-              "absolute top-3 left-3 p-1.5 rounded-lg bg-white/90 shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-white",
-              isStarred && "opacity-100"
-            )}
-          >
-            <Star
-              className={cn(
-                "h-4 w-4",
-                isStarred ? "fill-amber-400 text-amber-400" : "text-slate-500"
-              )}
+    <div className="group relative flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-indigo-200 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
+      <Link href={`/boards/${board.id}`} className="block">
+        <div className="relative h-40 w-full bg-gradient-to-br from-slate-50 to-slate-100">
+          {imgSrc ? (
+            <Image
+              src={imgSrc}
+              alt={board.title || "Board thumbnail"}
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              className="object-cover"
+              onError={() => setImgSrc(null)}
             />
-          </button>
-        )}
-
-        <div className="absolute top-3 right-3">
-          <button
-            className="p-1.5 rounded-lg bg-white/90 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setMenuOpen((prev) => !prev);
-            }}
-          >
-            <MoreHorizontal className="h-4 w-4 text-slate-500" />
-          </button>
-          {menuOpen && onDelete && (
-            <div className="absolute right-0 top-9 z-50 w-36 rounded-xl border border-slate-200 bg-white py-1 shadow-xl" onClick={(e) => e.stopPropagation()}>
-              <button
-                onClick={() => { setConfirmOpen(true); }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete board
-              </button>
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-indigo-50 flex items-center justify-center mb-2 shadow-inner">
+                <span className="text-2xl font-bold text-indigo-300">A</span>
+              </div>
+              <span className="text-xs font-medium text-slate-400">No Preview</span>
             </div>
           )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/[0.02] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
+      </Link>
+
+      {onToggleStar && (
+        <button
+          onClick={() => onToggleStar(board.id)}
+          className={cn(
+            "absolute top-3 left-3 p-1.5 rounded-lg bg-white/90 shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-white",
+            isStarred && "opacity-100"
+          )}
+        >
+          <Star
+            className={cn(
+              "h-4 w-4",
+              isStarred ? "fill-amber-400 text-amber-400" : "text-slate-500"
+            )}
+          />
+        </button>
+      )}
+
+      <div className="absolute top-3 right-3 z-10">
+        <button
+          className="p-1.5 rounded-lg bg-white/90 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen((prev) => !prev);
+          }}
+        >
+          <MoreHorizontal className="h-4 w-4 text-slate-500" />
+        </button>
+        {menuOpen && onDelete && (
+          <div className="absolute right-0 top-9 z-50 w-36 rounded-xl border border-slate-200 bg-white py-1 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => { setConfirmOpen(true); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete board
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="p-4">
+      <Link href={`/boards/${board.id}`} className="block p-4">
         <h3 className="font-semibold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">
           {board.title}
         </h3>
@@ -148,8 +142,8 @@ export const BoardCard = ({ board, onToggleStar, onDelete, isStarred = false }: 
           <Clock className="h-3 w-3" />
           <span>{formatDate(board.updatedAt)}</span>
         </div>
-      </div>
-    </Link>
+      </Link>
+    </div>
 
     <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
       <DialogContent className="sm:max-w-md">

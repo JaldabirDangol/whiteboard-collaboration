@@ -2,7 +2,7 @@
 
 import { useToolStore, ToolType } from "@/store/useToolStore";
 import { ComponentType, SVGProps } from "react";
-import { Circle, Eraser, Minus, Pen, Plus, RectangleEllipsis, Type, Zap, Undo, Redo } from "lucide-react";
+import { ArrowRight, Circle, Eraser, Minus, Pen, Plus, RectangleEllipsis, Square, Type, Undo, Redo, Zap } from "lucide-react";
 
 type Tool = {
   tool: ToolType;
@@ -25,10 +25,11 @@ const tools: Tool[] = [
   { tool: "pen", icon: Pen, label: "Pen" },
   { tool: "eraser", icon: Eraser, label: "Eraser" },
   { tool: "line", icon: Minus, label: "Line" },
+  { tool: "arrow", icon: ArrowRight, label: "Arrow" },
   { tool: "laser", icon: Zap, label: "Laser" },
-  { tool: "rectangle", icon: RectangleEllipsis, label: "Rectangle" },
+  { tool: "rectangle", icon: Square, label: "Rectangle" },
   { tool: "circle", icon: Circle, label: "Circle" },
-  { tool: "ellipse", icon: Circle, label: "Ellipse" },
+  { tool: "ellipse", icon: RectangleEllipsis, label: "Ellipse" },
   { tool: "text", icon: Type, label: "Text" },
 ];
 
@@ -118,20 +119,6 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
             />
           </button>
           
-          <div className="flex flex-col items-center gap-1 mt-2">
-            <input
-              aria-label="Stroke width"
-              type="range"
-              disabled={disabled}
-              min={STROKE_MIN}
-              max={STROKE_MAX}
-              step={1}
-              value={strokeWidth}
-              onChange={(event) => setStroke(Number(event.target.value))}
-              className="h-24 w-1.5 cursor-pointer appearance-none rounded-full bg-slate-200 accent-indigo-500 [writing-mode:bt-lr]"
-            />
-          </div>
-
           <div className="mt-2 flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1">
             <button
               type="button"

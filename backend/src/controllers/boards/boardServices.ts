@@ -286,7 +286,7 @@ export async function replaceBoardShapes(
         await tx.shape.create({ data: rowData });
       }
     }
-  });
+  }, { timeout: 20_000 });
 
   return valid.length;
 }
@@ -324,7 +324,7 @@ export async function saveBoardSnapshot(boardId: string, data: unknown) {
         });
 
         return snapshot;
-      });
+      }, { timeout: 20_000 });
     } catch (err: unknown) {
       const prismaErr = err as { code?: string };
       if (prismaErr.code === "P2002" && attempt < 2) {

@@ -31,14 +31,16 @@ export async function restoreSnapshot(boardId: string, userId: string, snapshotI
   }
 
   const shapes = extractShapesFromSnapshot(snapshot);
+
+  // DB first — if this fails, we abort without corrupting the in-memory Y.Doc
+  await replaceBoardShapes(boardId, userId, shapes as Record<string, unknown>[]);
+  await setBoardCurrentSnapshotVersion(boardId, snapshot.version);
+
   const doc = getYDoc(boardId);
 
   doc.transact(() => {
     applyShapesToDoc(doc, shapes);
   }, UNDO_REDO_ORIGIN);
-
-  await replaceBoardShapes(boardId, userId, shapes as Record<string, unknown>[]);
-  await setBoardCurrentSnapshotVersion(boardId, snapshot.version);
 
   logAction({
     boardId,

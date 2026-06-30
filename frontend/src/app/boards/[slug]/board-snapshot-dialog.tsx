@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { History, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -40,6 +41,9 @@ export default function SnapshotDialog({ boardId }: SnapshotDialogProps) {
       setConfirmId(null);
       setOpen(false);
       queryClient.invalidateQueries({ queryKey: ["board-snapshots", boardId] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to restore snapshot");
     },
   });
 

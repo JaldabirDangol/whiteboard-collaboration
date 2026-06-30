@@ -125,7 +125,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     () => boardDetails?.members?.find((member) => member.userId === user?.id) ?? null,
     [boardDetails?.members, user?.id]
   );
-  const canEditBoard = (currentMembership?.role === "ADMIN" || currentMembership?.role === "EDITOR") && !serverReadOnly;
+  const canEditBoard = currentMembership?.role === "ADMIN" || currentMembership?.role === "EDITOR";
   const shapesRef = useRef(shapes);
   shapesRef.current = shapes;
   const shapeVersionRef = useRef(0);
@@ -578,8 +578,11 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     container.appendChild(el);
     textareaRef.current = el;
 
-    el.focus();
-    el.select();
+    // Use rAF to wait for React re-render before focusing
+    requestAnimationFrame(() => {
+      el.focus();
+      el.select();
+    });
 
     el.addEventListener("pointerdown", (e) => e.stopPropagation());
 
@@ -588,7 +591,11 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     el.addEventListener("blur", () => {
       if (cancelled) return;
       finishTextEditing(el.value);
-      cleanupTextarea(el);
+      // cleanupTextarea intentionally NOT called here —
+      // finishTextEditing calls setEditingTextId(null), which
+      // triggers the cleanup effect (line 901) to remove the DOM node.
+      // Calling it here would cause a NotFoundError when spawnTextarea
+      // removes an existing textarea and synchronously fires blur.
     });
 
     el.addEventListener("keydown", (e) => {
@@ -607,7 +614,11 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
   };
 
   const cleanupTextarea = (el: HTMLTextAreaElement) => {
-    if (el.parentNode) el.parentNode.removeChild(el);
+    try {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    } catch {
+      // Ignore — may be called re-entrantly during blur propagation
+    }
     if (textareaRef.current === el) textareaRef.current = null;
   };
 

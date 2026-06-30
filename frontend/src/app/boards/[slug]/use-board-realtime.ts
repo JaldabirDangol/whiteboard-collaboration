@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
+import { toast } from "sonner";
 import { acquireSocket, releaseSocket } from "@/lib/board-socket";
 import type { BoardShape, LaserStroke, RemoteCursor } from "./board-types";
 import {
@@ -208,6 +209,11 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       setForbiddenMessage(message || "You only have viewer access on this board");
     };
 
+    const onBoardError = ({ message }: { message?: string }) => {
+      console.error("[board:error]", message);
+      toast.error(message || "An unexpected error occurred on the board");
+    };
+
     const onBoardDeleted = () => {
       window.location.href = "/boards";
     };
@@ -239,6 +245,8 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     };
 
     const onConnect = () => {
+      setServerReadOnly(false);
+      setForbiddenMessage(null);
       joinRoom();
     };
 
@@ -253,6 +261,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     socket.on("yjs:update", onUpdate);
     socket.on("board:state", onState);
     socket.on("board:forbidden", onBoardForbidden);
+    socket.on("board:error", onBoardError);
     socket.on("board:deleted", onBoardDeleted);
     socket.on("laser:stroke", onLaserStroke);
     socket.on("presence:cursorMove", onCursorMove);
@@ -274,6 +283,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       socket.off("yjs:update", onUpdate);
       socket.off("board:state", onState);
       socket.off("board:forbidden", onBoardForbidden);
+      socket.off("board:error", onBoardError);
       socket.off("board:deleted", onBoardDeleted);
       socket.off("laser:stroke", onLaserStroke);
       socket.off("presence:cursorMove", onCursorMove);

@@ -201,133 +201,154 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
 
   // 2. Continuous Sync: The "Holy Grail" event
   socket.on("yjs:update", async ({ boardId, update }: { boardId: string, update: unknown }) => {
-    if (!validateBoardId(boardId, socket)) return;
-    const canEdit = await canEditBoard(socket, boardId);
+    try {
+      if (!validateBoardId(boardId, socket)) return;
+      const canEdit = await canEditBoard(socket, boardId);
 
-    if (!canEdit) {
-      socket.emit("board:forbidden", {
-        boardId,
-        message: "You need editor access to modify this board",
+      if (!canEdit) {
+        socket.emit("board:forbidden", {
+          boardId,
+          message: "You need editor access to modify this board",
+        });
+        return;
+      }
+
+      const doc = getYDoc(boardId);
+      const normalizedUpdate = toUint8(update);
+      if (normalizedUpdate.length === 0) {
+        return;
+      }
+
+      // Apply the change to the server's version of the doc
+      Y.applyUpdate(doc, normalizedUpdate, CLIENT_UPDATE_ORIGIN);
+
+      // Broadcast that specific change to everyone else in the room
+      socket.to(boardId).emit("yjs:update", Array.from(normalizedUpdate));
+
+      // Trigger debounced persist
+      debouncedPersist(boardId, doc, socket.data.user?.id);
+    } catch (error) {
+      console.error(`[yjs:update] error for board ${boardId}:`, error);
+      socket.emit("board:error", {
+        message: "Failed to apply update",
       });
-      return;
     }
-
-    const doc = getYDoc(boardId);
-    const normalizedUpdate = toUint8(update);
-    if (normalizedUpdate.length === 0) {
-      return;
-    }
-
-    // Apply the change to the server's version of the doc
-    Y.applyUpdate(doc, normalizedUpdate, CLIENT_UPDATE_ORIGIN);
-
-    // Broadcast that specific change to everyone else in the room
-    socket.to(boardId).emit("yjs:update", Array.from(normalizedUpdate));
-
-    // Trigger debounced persist
-    debouncedPersist(boardId, doc, socket.data.user?.id);
   });
 
   socket.on("board:undo", async ({ boardId }: { boardId: string }) => {
-    if (!validateBoardId(boardId, socket)) return;
-    const canEdit = await canEditBoard(socket, boardId);
-    if (!canEdit) {
-      socket.emit("board:forbidden", {
+    try {
+      if (!validateBoardId(boardId, socket)) return;
+      const canEdit = await canEditBoard(socket, boardId);
+      if (!canEdit) {
+        socket.emit("board:forbidden", {
+          boardId,
+          message: "You need editor access to modify this board",
+        });
+        return;
+      }
+
+      const pendingTimer = persistTimers.get(boardId);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        persistTimers.delete(boardId);
+      }
+
+      const latestSnapshot = await getLatestBoardSnapshot(boardId);
+      if (!latestSnapshot) return;
+
+      let currentVersion = await getBoardCurrentSnapshotVersion(boardId);
+      if (!currentVersion) {
+        currentVersion = latestSnapshot.version;
+        await setBoardCurrentSnapshotVersion(boardId, currentVersion);
+      }
+
+      const previousSnapshot = await getSnapshotBeforeVersion(boardId, currentVersion);
+      if (!previousSnapshot) return;
+
+      const shapes = extractShapesFromSnapshot(previousSnapshot);
+      const doc = getYDoc(boardId);
+
+      // DB first — if this fails, abort without corrupting Y.Doc
+      await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
+      await setBoardCurrentSnapshotVersion(boardId, previousSnapshot.version);
+
+      doc.transact(() => {
+        applyShapesToDoc(doc, shapes);
+      }, UNDO_REDO_ORIGIN);
+
+      logAction({
         boardId,
-        message: "You need editor access to modify this board",
+        userId: socket.data.user?.id ?? "system",
+        action: "board:undo",
+        metadata: { version: previousSnapshot.version },
+      }).catch(() => {});
+
+      const state = Y.encodeStateAsUpdate(doc);
+      io.to(boardId).emit("board:state", Array.from(state));
+    } catch (error) {
+      console.error(`[board:undo] error for board ${boardId}:`, error);
+      socket.emit("board:error", {
+        message: "Undo failed due to a server error",
       });
-      return;
     }
-
-    const pendingTimer = persistTimers.get(boardId);
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      persistTimers.delete(boardId);
-    }
-
-    const latestSnapshot = await getLatestBoardSnapshot(boardId);
-    if (!latestSnapshot) return;
-
-    let currentVersion = await getBoardCurrentSnapshotVersion(boardId);
-    if (!currentVersion) {
-      currentVersion = latestSnapshot.version;
-      await setBoardCurrentSnapshotVersion(boardId, currentVersion);
-    }
-
-    const previousSnapshot = await getSnapshotBeforeVersion(boardId, currentVersion);
-    if (!previousSnapshot) return;
-
-    const shapes = extractShapesFromSnapshot(previousSnapshot);
-    const doc = getYDoc(boardId);
-
-    // Use doc.transact to make undo atomic — any concurrent yjs:update
-    // will be queued by Yjs and applied after the transaction completes
-    doc.transact(() => {
-      applyShapesToDoc(doc, shapes);
-    }, UNDO_REDO_ORIGIN);
-
-    await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
-    await setBoardCurrentSnapshotVersion(boardId, previousSnapshot.version);
-
-    logAction({
-      boardId,
-      userId: socket.data.user?.id ?? "system",
-      action: "board:undo",
-      metadata: { version: previousSnapshot.version },
-    }).catch(() => {});
-
-    const state = Y.encodeStateAsUpdate(doc);
-    io.to(boardId).emit("board:state", Array.from(state));
   });
 
   socket.on("board:redo", async ({ boardId }: { boardId: string }) => {
-    if (!validateBoardId(boardId, socket)) return;
-    const canEdit = await canEditBoard(socket, boardId);
-    if (!canEdit) {
-      socket.emit("board:forbidden", {
+    try {
+      if (!validateBoardId(boardId, socket)) return;
+      const canEdit = await canEditBoard(socket, boardId);
+      if (!canEdit) {
+        socket.emit("board:forbidden", {
+          boardId,
+          message: "You need editor access to modify this board",
+        });
+        return;
+      }
+
+      const pendingTimer = persistTimers.get(boardId);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        persistTimers.delete(boardId);
+      }
+
+      const latestSnapshot = await getLatestBoardSnapshot(boardId);
+      if (!latestSnapshot) return;
+
+      let currentVersion = await getBoardCurrentSnapshotVersion(boardId);
+      if (!currentVersion) {
+        currentVersion = latestSnapshot.version;
+        await setBoardCurrentSnapshotVersion(boardId, currentVersion);
+      }
+
+      const nextSnapshot = await getSnapshotAfterVersion(boardId, currentVersion);
+      if (!nextSnapshot) return;
+
+      const shapes = extractShapesFromSnapshot(nextSnapshot);
+      const doc = getYDoc(boardId);
+
+      // DB first — if this fails, abort without corrupting Y.Doc
+      await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
+      await setBoardCurrentSnapshotVersion(boardId, nextSnapshot.version);
+
+      doc.transact(() => {
+        applyShapesToDoc(doc, shapes);
+      }, UNDO_REDO_ORIGIN);
+
+      logAction({
         boardId,
-        message: "You need editor access to modify this board",
+        userId: socket.data.user?.id ?? "system",
+        action: "board:redo",
+        metadata: { version: nextSnapshot.version },
+      }).catch(() => {});
+
+      const state = Y.encodeStateAsUpdate(doc);
+      io.to(boardId).emit("board:state", Array.from(state));
+    } catch (error) {
+      console.error(`[board:redo] error for board ${boardId}:`, error);
+      socket.emit("board:error", {
+        message: "Redo failed due to a server error",
       });
-      return;
     }
-
-    const pendingTimer = persistTimers.get(boardId);
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      persistTimers.delete(boardId);
-    }
-
-    const latestSnapshot = await getLatestBoardSnapshot(boardId);
-    if (!latestSnapshot) return;
-
-    let currentVersion = await getBoardCurrentSnapshotVersion(boardId);
-    if (!currentVersion) {
-      currentVersion = latestSnapshot.version;
-      await setBoardCurrentSnapshotVersion(boardId, currentVersion);
-    }
-
-    const nextSnapshot = await getSnapshotAfterVersion(boardId, currentVersion);
-    if (!nextSnapshot) return;
-
-    const shapes = extractShapesFromSnapshot(nextSnapshot);
-    const doc = getYDoc(boardId);
-
-    doc.transact(() => {
-      applyShapesToDoc(doc, shapes);
-    }, UNDO_REDO_ORIGIN);
-
-    await replaceBoardShapes(boardId, socket.data.user?.id ?? "system", shapes as Record<string, unknown>[]);
-    await setBoardCurrentSnapshotVersion(boardId, nextSnapshot.version);
-
-    logAction({
-      boardId,
-      userId: socket.data.user?.id ?? "system",
-      action: "board:redo",
-      metadata: { version: nextSnapshot.version },
-    }).catch(() => {});
-
-    const state = Y.encodeStateAsUpdate(doc);
-    io.to(boardId).emit("board:state", Array.from(state));
   });
 
   socket.on("board:leave", async (boardId: string) => {

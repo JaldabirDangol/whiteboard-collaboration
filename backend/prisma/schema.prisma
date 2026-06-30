@@ -38,6 +38,7 @@ model Board {
   comments  Comment[]
   assets    Asset[]
   logs      AuditLog[]
+  notifications Notification[]
   settings  BoardSettings?
   thumbnailUrl String?
   currentSnapshotVersion Int?

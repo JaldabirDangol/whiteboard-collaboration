@@ -132,7 +132,7 @@ const hydrateDocFromPersistence = async (boardId: string, doc: Y.Doc) => {
   boardMap.set(SHAPES_KEY, JSON.stringify(shapes));
 };
 
-const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string, forceSnapshot = false) => {
+const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string, forceSnapshot = false, logShapeChanges = false) => {
   try {
     const shapes = parseShapesFromYDoc(doc);
 
@@ -143,12 +143,30 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
       await saveBoardSnapshot(boardId, { shapes });
     }
 
-    const { orphanedComments } = await replaceBoardShapes(boardId, userId, shapes as Record<string, unknown>[]);
+    const { orphanedComments, created, updated, deleted } = await replaceBoardShapes(boardId, userId, shapes as Record<string, unknown>[]);
     if (orphanedComments.length > 0) {
       const io = getIO();
       for (const { commentId, shapeId } of orphanedComments) {
         io.to(boardId).emit("comment:removed", { commentId, shapeId });
       }
+    }
+
+    if (logShapeChanges && userId && (created > 0 || updated > 0 || deleted > 0)) {
+      logAction({
+        boardId,
+        userId,
+        action: created > 0 && updated === 0 && deleted === 0
+          ? "object.created"
+          : deleted > 0 && created === 0 && updated === 0
+            ? "object.deleted"
+            : "object.updated",
+        metadata: {
+          created,
+          updated,
+          deleted,
+          type: shapes.length === 1 ? (shapes[0] as Record<string, unknown> | null)?.type ?? null : null,
+        },
+      }).catch(() => {});
     }
   } catch (error) {
     console.error("[board:persist] immediate persist failed", { boardId, error });
@@ -163,7 +181,7 @@ const debouncedPersist = (boardId: string, doc: Y.Doc, userId?: string) => {
     boardId,
     setTimeout(async () => {
       persistTimers.delete(boardId);
-      await persistBoardStateNow(boardId, doc, userId);
+      await persistBoardStateNow(boardId, doc, userId, false, true);
     }, PERSIST_DEBOUNCE_MS),
   );
 };
@@ -195,9 +213,18 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         serverTime: Date.now(),
       });
 
+      const joinerUserId = socket.data.user?.id;
       socket.to(boardId).emit("board:userJoined", {
-        userId: socket.data.user?.id ?? socket.id,
+        userId: joinerUserId ?? socket.id,
       });
+
+      if (joinerUserId) {
+        logAction({
+          boardId,
+          userId: joinerUserId,
+          action: "board.joined",
+        }).catch(() => {});
+      }
     } catch (error) {
       console.error("[board:join]", error);
       socket.emit("error", { message: "Failed to load board" });

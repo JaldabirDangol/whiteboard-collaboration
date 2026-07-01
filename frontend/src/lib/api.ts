@@ -629,3 +629,25 @@ export async function markAllNotificationsRead(): Promise<void> {
   });
   if (!res.ok) throw new Error("Failed to mark all as read");
 }
+
+export async function acceptInvitation(notificationId: string): Promise<void> {
+  const res = await fetch(`${apiUrl}/notifications/${notificationId}/accept`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Failed to accept invitation");
+  }
+}
+
+export async function declineInvitation(notificationId: string): Promise<void> {
+  const res = await fetch(`${apiUrl}/notifications/${notificationId}/decline`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Failed to decline invitation");
+  }
+}

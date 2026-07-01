@@ -143,7 +143,7 @@ export async function shareBoard(req: Request, res: Response) {
 
     const nextRole = role === "EDITOR" ? "EDITOR" : "VIEWER";
 
-    const result = await boardService.shareBoardWithEmail(
+    const result = await boardService.inviteByEmail(
       boardId,
       ownerUserId,
       email.trim().toLowerCase(),
@@ -153,17 +153,20 @@ export async function shareBoard(req: Request, res: Response) {
     await logAction({ boardId, userId: ownerUserId, action: "board.shared", metadata: { email: email.trim().toLowerCase(), role: nextRole } });
 
     const board = await prisma.board.findUnique({ where: { id: boardId }, select: { title: true } });
-    createNotification(
+    const notification = await createNotification(
       result.user.id,
       "share_invite",
       `You've been invited as ${nextRole.toLowerCase()} to "${board?.title ?? "a board"}"`,
       boardId,
-      { sharedBy: ownerUserId, role: nextRole }
-    ).catch((err) => console.error("[createNotification] Failed to create notification:", err));
+      { sharedBy: ownerUserId, role: nextRole, status: "pending" }
+    ).catch((err) => {
+      console.error("[createNotification] Failed to create notification:", err);
+      throw err;
+    });
 
     return res.json({
-      message: "Board shared successfully",
-      member: result.member,
+      message: "Invitation sent successfully",
+      notification,
       user: result.user,
     });
   } catch (error) {
@@ -272,6 +275,94 @@ export async function removeMember(req: Request, res: Response) {
 
     await boardService.removeMember(boardId, targetUserId);
     return res.json({ message: "Member removed successfully" });
+  } catch (error) {
+    return res.status(400).json({ error: (error as Error).message });
+  }
+}
+
+export async function acceptInvitation(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    const notificationId = req.params.id;
+
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const notification = await prisma.notification.findUnique({
+      where: { id: notificationId },
+    });
+
+    if (!notification || notification.userId !== userId) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+
+    if (notification.type !== "share_invite") {
+      return res.status(400).json({ error: "Not an invitation" });
+    }
+
+    const meta = notification.metadata as { status?: string; role?: string; sharedBy?: string } | null;
+    if (!meta || meta.status !== "pending") {
+      return res.status(400).json({ error: "Invitation is not pending" });
+    }
+
+    const role = (meta.role === "EDITOR" ? "EDITOR" : "VIEWER") as "EDITOR" | "VIEWER";
+    const boardId = notification.boardId;
+    if (!boardId) return res.status(400).json({ error: "Invalid invitation" });
+
+    const member = await boardService.acceptBoardInvitation(notificationId, userId, boardId, role);
+
+    await prisma.notification.update({
+      where: { id: notificationId },
+      data: {
+        readAt: new Date(),
+        metadata: { ...meta, status: "accepted" },
+      },
+    });
+
+    const io = getIO();
+    io.to(`user:${userId}`).emit("notification:updated", { id: notificationId });
+
+    return res.json({ message: "Invitation accepted", member });
+  } catch (error) {
+    return res.status(400).json({ error: (error as Error).message });
+  }
+}
+
+export async function declineInvitation(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    const notificationId = req.params.id;
+
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const notification = await prisma.notification.findUnique({
+      where: { id: notificationId },
+    });
+
+    if (!notification || notification.userId !== userId) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+
+    if (notification.type !== "share_invite") {
+      return res.status(400).json({ error: "Not an invitation" });
+    }
+
+    const meta = notification.metadata as { status?: string } | null;
+    if (!meta || meta.status !== "pending") {
+      return res.status(400).json({ error: "Invitation is not pending" });
+    }
+
+    await prisma.notification.update({
+      where: { id: notificationId },
+      data: {
+        readAt: new Date(),
+        metadata: { ...meta, status: "declined" },
+      },
+    });
+
+    const io = getIO();
+    io.to(`user:${userId}`).emit("notification:updated", { id: notificationId });
+
+    return res.json({ message: "Invitation declined" });
   } catch (error) {
     return res.status(400).json({ error: (error as Error).message });
   }

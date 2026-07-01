@@ -34,13 +34,18 @@ const formatTimestamp = (dateLike: string) => {
 
 const actionLabel = (action: string): string => {
   switch (action) {
-    case "object.created": return "added a";
-    case "object.updated": return "modified a";
-    case "object.deleted": return "removed a";
+    case "object.created": return "added";
+    case "object.updated": return "updated";
+    case "object.deleted": return "removed";
     case "board.created": return "created the board";
     case "board.joined": return "joined the board";
     case "board.shared": return "shared the board";
     case "board.deleted": return "deleted the board";
+    case "board:undo": return "undid last action";
+    case "board:redo": return "redid last action";
+    case "snapshot:restore": return "restored a snapshot";
+    case "comment.created": return "commented on";
+    case "comment.deleted": return "deleted a comment on";
     default: return action;
   }
 };
@@ -154,9 +159,37 @@ export default function ActivityFeed({
 
         {resolvedActivities.map((entry) => {
           const isMine = currentUserId ? entry.userId === currentUserId : false;
-          const metaType = entry.metadata?.type as string | undefined;
-          const shapeType = actionTypeLabel(metaType);
           const action = actionLabel(entry.action);
+          const meta = entry.metadata ?? {};
+          const metaType = meta.type as string | undefined;
+          const shapeType = actionTypeLabel(metaType);
+          const createdCount = meta.created as number | undefined;
+          const updatedCount = meta.updated as number | undefined;
+          const deletedCount = meta.deleted as number | undefined;
+
+          let detail: string;
+          if (["object.created", "object.updated", "object.deleted"].includes(entry.action)) {
+            const total = (createdCount ?? 0) + (updatedCount ?? 0) + (deletedCount ?? 0);
+            if (total > 1) {
+              const parts: string[] = [];
+              if (createdCount) parts.push(`${createdCount} added`);
+              if (updatedCount) parts.push(`${updatedCount} updated`);
+              if (deletedCount) parts.push(`${deletedCount} removed`);
+              detail = parts.join(", ");
+            } else if (metaType) {
+              detail = `${action} a ${shapeType}`;
+            } else {
+              detail = `${action} a shape`;
+            }
+          } else if (["board.created", "board.joined", "board.shared", "board.deleted", "board:undo", "board:redo", "snapshot:restore"].includes(entry.action)) {
+            detail = action;
+          } else if (entry.action === "comment.created") {
+            detail = metaType ? `commented on a ${shapeType}` : "commented on a shape";
+          } else if (entry.action === "comment.deleted") {
+            detail = metaType ? `deleted a comment on a ${shapeType}` : "deleted a comment on a shape";
+          } else {
+            detail = action;
+          }
 
           return (
             <div
@@ -171,11 +204,7 @@ export default function ActivityFeed({
                   <span className="font-medium text-slate-900">
                     {isMine ? "You" : entry.resolvedName}
                   </span>{" "}
-                  {action.includes("the board") ? (
-                    action
-                  ) : (
-                    <>{action} {shapeType}</>
-                  )}
+                  {detail}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
                   {formatTimestamp(entry.createdAt)}

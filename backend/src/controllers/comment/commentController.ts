@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import * as commentService from "./commentService.js";
 import { getIO } from "@/socket/index.js";
 import { getBoardMember } from "@/controllers/boards/boardServices.js";
+import { logAction } from "@/lib/auditLog.js";
 
 interface CreateCommentBody {
   shapeId: string;
@@ -51,6 +52,14 @@ export const createComment = async (
 
     const io = getIO();
     io.to(boardId).emit("comment:new", comment);
+
+    logAction({
+      boardId,
+      userId,
+      action: "comment.created",
+      metadata: { commentId: comment.id, shapeId: comment.clientShapeId ?? comment.shapeId },
+    }).catch(() => {});
+
     res.status(201).json({ message: "Comment created", data: comment });
   } catch (error) {
     console.error("[CreateComment Error]:", error);
@@ -84,7 +93,16 @@ export const deleteComment = async (req: Request, res: Response) => {
     }
 
     const io = getIO();
-    io.to(boardId).emit("comment:removed", { commentId: id, shapeId: req.query.shapeId as string });
+    const shapeIdParam = req.query.shapeId as string;
+    io.to(boardId).emit("comment:removed", { commentId: id, shapeId: shapeIdParam });
+
+    logAction({
+      boardId,
+      userId,
+      action: "comment.deleted",
+      metadata: { commentId: id, shapeId: shapeIdParam },
+    }).catch(() => {});
+
     res.json({ message: "Comment deleted" });
   } catch (error) {
     console.error("[DeleteComment Error]:", error);

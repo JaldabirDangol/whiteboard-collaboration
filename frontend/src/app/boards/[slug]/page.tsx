@@ -109,8 +109,11 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     updateShapesLocally,
     emitCursorMove,
     emitLaserStroke,
+    emitShapeDraft,
     emitHistoryEvent,
+    syncShapesFromYDoc,
     remoteLaserStrokes,
+    remoteDraftShapes,
     onlineUserIds,
     serverReadOnly,
     forbiddenMessage,
@@ -170,8 +173,10 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     setShapes,
     updateShapesLocally,
     emitCursorMove,
+    emitShapeDraft,
     setLaserStrokes,
     emitLaserStroke,
+    onDrawingEnd: syncShapesFromYDoc,
     drawingRef,
     snapToGrid: showGrid,
     onTextCreated: (shapeId, shapeData) => {
@@ -1393,6 +1398,15 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
               </Group>
             </Layer>
 
+            {/* Remote draft shapes layer (in-progress drawings from others) */}
+            <Layer listening={false}>
+              <Group x={viewport.x} y={viewport.y} scaleX={zoom} scaleY={zoom}>
+                {Array.from(remoteDraftShapes.values()).map((draft) => (
+                  <DraftShapeRenderer key={draft.id} shape={draft} />
+                ))}
+              </Group>
+            </Layer>
+
             <Layer listening={false}>
               <Group x={viewport.x} y={viewport.y} scaleX={zoom} scaleY={zoom}>
                 {[...laserStrokes, ...remoteLaserStrokes].map((stroke) => (
@@ -1587,6 +1601,78 @@ const BoardImageShape = ({
       ref={getShapeNode}
     />
   );
+};
+
+const DraftShapeRenderer = ({ shape }: { shape: BoardShape }) => {
+  if (shape.type === "line") {
+    return (
+      <Line
+        points={shape.points}
+        stroke={shape.color}
+        strokeWidth={shape.strokeWidth}
+        tension={0.5}
+        lineCap="round"
+        lineJoin="round"
+        opacity={0.4}
+        dash={[6 / 1, 4 / 1]}
+        listening={false}
+      />
+    );
+  }
+
+  if (shape.type === "rectangle") {
+    const x = shape.width < 0 ? shape.x + shape.width : shape.x;
+    const y = shape.height < 0 ? shape.y + shape.height : shape.y;
+    return (
+      <Rect
+        x={x}
+        y={y}
+        width={Math.abs(shape.width)}
+        height={Math.abs(shape.height)}
+        stroke={shape.color}
+        strokeWidth={shape.strokeWidth}
+        fill={shape.fill || "transparent"}
+        opacity={0.4}
+        dash={[6 / 1, 4 / 1]}
+        listening={false}
+      />
+    );
+  }
+
+  if (shape.type === "circle") {
+    return (
+      <Circle
+        x={shape.x}
+        y={shape.y}
+        radius={shape.radius}
+        stroke={shape.color}
+        strokeWidth={shape.strokeWidth}
+        fill={shape.fill || "transparent"}
+        opacity={0.4}
+        dash={[6 / 1, 4 / 1]}
+        listening={false}
+      />
+    );
+  }
+
+  if (shape.type === "ellipse") {
+    return (
+      <Ellipse
+        x={shape.x}
+        y={shape.y}
+        radiusX={shape.radiusX}
+        radiusY={shape.radiusY}
+        stroke={shape.color}
+        strokeWidth={shape.strokeWidth}
+        fill={shape.fill || "transparent"}
+        opacity={0.4}
+        dash={[6 / 1, 4 / 1]}
+        listening={false}
+      />
+    );
+  }
+
+  return null;
 };
 
 const useImageElement = (url: string) => {

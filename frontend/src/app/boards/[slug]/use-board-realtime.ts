@@ -8,12 +8,18 @@ import {
   LOCAL_ORIGIN,
   REMOTE_ORIGIN,
   SHAPES_KEY,
+  SHAPE_KEY_PREFIX,
+  isShapeKey,
+  shapeKeyForId,
+  idFromShapeKey,
   normalizeShapesForClient,
   parseShapes,
+  readShapesFromYBoard,
   toUint8,
 } from "./board-shape-utils";
 
 const CURSOR_STALE_MS = 12000;
+const DRAFT_TTL_MS = 5000;
 
 type UseBoardRealtimeArgs = {
   boardId: string;
@@ -26,12 +32,14 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
   const docRef = useRef<Y.Doc | null>(null);
   const yBoardRef = useRef<Y.Map<string> | null>(null);
   const lastCursorEmitAt = useRef(0);
+  const lastDraftEmitAt = useRef(0);
   const userIdRef = useRef(userId);
   const drawingRef = useRef(false);
 
   const [shapes, setShapes] = useState<BoardShape[]>([]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
   const [remoteLaserStrokes, setRemoteLaserStrokes] = useState<LaserStroke[]>([]);
+  const [remoteDraftShapes, setRemoteDraftShapes] = useState<Map<string, BoardShape>>(new Map());
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [serverReadOnly, setServerReadOnly] = useState(false);
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
@@ -39,6 +47,29 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
   const setShapesWithCache = useCallback((value: React.SetStateAction<BoardShape[]>) => {
     setShapes((prev) => (typeof value === "function" ? (value as (prev: BoardShape[]) => BoardShape[])(prev) : value));
+  }, []);
+
+  const syncShapesFromYDoc = useCallback(() => {
+    const yBoard = yBoardRef.current;
+    if (!yBoard) return;
+    const committed = readShapesFromYBoard(yBoard);
+    setShapesWithCache((prev) => {
+      const committedIds = new Set(committed.map(s => s.id));
+      const drafts = prev.filter(s => !committedIds.has(s.id));
+      return [...committed, ...drafts];
+    });
+    // Clean remote drafts that are now committed
+    setRemoteDraftShapes((prev) => {
+      const committedIds = new Set(committed.map(s => s.id));
+      let changed = false;
+      for (const [uid, draft] of prev) {
+        if (committedIds.has(draft.id)) {
+          prev.delete(uid);
+          changed = true;
+        }
+      }
+      return changed ? new Map(prev) : prev;
+    });
   }, []);
 
   const persistShapes = useCallback((nextShapes: BoardShape[]) => {
@@ -49,7 +80,22 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     const normalizedShapes = normalizeShapesForClient(nextShapes);
 
     doc.transact(() => {
-      yBoard.set(SHAPES_KEY, JSON.stringify(normalizedShapes));
+      // Delete removed shapes
+      const existingKeys = new Set(Array.from(yBoard.keys()).filter(isShapeKey));
+      const newIds = new Set(normalizedShapes.map(s => s.id));
+      for (const key of existingKeys) {
+        if (!newIds.has(idFromShapeKey(key))) {
+          yBoard.delete(key);
+        }
+      }
+      // Write per-shape entries
+      for (const shape of normalizedShapes) {
+        yBoard.set(shapeKeyForId(shape.id), JSON.stringify(shape));
+      }
+      // Clean up old shapes blob if migrating
+      if (yBoard.has(SHAPES_KEY)) {
+        yBoard.delete(SHAPES_KEY);
+      }
     }, LOCAL_ORIGIN);
   }, []);
 
@@ -82,6 +128,15 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     lastCursorEmitAt.current = now;
   }, [boardId]);
 
+  const emitShapeDraft = useCallback((draft: BoardShape) => {
+    const socket = socketRef.current;
+    if (!socket) return;
+    const now = Date.now();
+    if (now - lastDraftEmitAt.current <= 50) return;
+    lastDraftEmitAt.current = now;
+    socket.emit("shape:draft", { boardId, draft });
+  }, [boardId]);
+
   const emitHistoryEvent = useCallback((type: "undo" | "redo") => {
     const socket = socketRef.current;
     if (!socket) return false;
@@ -96,23 +151,26 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
     const doc = docRef.current;
     const yBoard = yBoardRef.current;
-    const next = normalizeShapesForClient(persistedShapes as unknown[]);
 
     // If we already received data via socket, don't overwrite with REST
     if (hasRemoteDataRef.current) return;
 
     if (doc && yBoard) {
-      const existingShapes = yBoard.get(SHAPES_KEY);
-      if (!existingShapes) {
+      const shapeKeys = Array.from(yBoard.keys()).filter(isShapeKey);
+      if (shapeKeys.length === 0 && !yBoard.get(SHAPES_KEY)) {
+        const next = normalizeShapesForClient(persistedShapes as unknown[]);
         doc.transact(() => {
-          yBoard.set(SHAPES_KEY, JSON.stringify(next));
+          for (const shape of next) {
+            yBoard.set(shapeKeyForId(shape.id), JSON.stringify(shape));
+          }
         }, REMOTE_ORIGIN);
       }
     }
 
     setShapesWithCache((prev) => {
+      const next = readShapesFromYBoard(yBoard!);
       if (prev.length > 0 && prev.length === next.length) return prev;
-      return next;
+      return next.length > 0 ? next : normalizeShapesForClient(persistedShapes as unknown[]);
     });
   }, [persistedShapes]);
 
@@ -130,12 +188,6 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     const socket = acquireSocket();
     socketRef.current = socket;
 
-    const applySnapshot = () => {
-      if (drawingRef.current) return;
-      const snapshot = yBoard.get(SHAPES_KEY);
-      setShapesWithCache(normalizeShapesForClient(parseShapes(snapshot)));
-    };
-
     const onDocUpdate = (update: Uint8Array, origin: unknown) => {
       if (origin !== LOCAL_ORIGIN) return;
       socket.emit("yjs:update", { boardId, update: Array.from(update) });
@@ -146,7 +198,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       const update = toUint8(yjsState);
       if (update.length === 0) return;
       Y.applyUpdate(doc, update, REMOTE_ORIGIN);
-      applySnapshot();
+      syncShapesFromYDoc();
     };
 
     const onUpdate = (rawUpdate: unknown) => {
@@ -154,7 +206,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       const update = toUint8(rawUpdate);
       if (update.length === 0) return;
       Y.applyUpdate(doc, update, REMOTE_ORIGIN);
-      applySnapshot();
+      syncShapesFromYDoc();
     };
 
     const onState = (rawUpdate: unknown) => {
@@ -162,7 +214,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       const update = toUint8(rawUpdate);
       if (update.length === 0) return;
       Y.applyUpdate(doc, update, REMOTE_ORIGIN);
-      applySnapshot();
+      syncShapesFromYDoc();
     };
 
     const onLaserStroke = ({ stroke, userId: incomingUserId }: { stroke: LaserStroke; userId?: string }) => {
@@ -175,6 +227,15 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       setTimeout(() => {
         setRemoteLaserStrokes((prev) => prev.filter((s) => s.id !== stroke.id));
       }, 1500);
+    };
+
+    const onShapeDraft = ({ draft, userId: draftUserId }: { draft: BoardShape; userId?: string }) => {
+      if (!draft || !draftUserId || draftUserId === userIdRef.current) return;
+      setRemoteDraftShapes((prev) => {
+        const next = new Map(prev);
+        next.set(draftUserId, draft);
+        return next;
+      });
     };
 
     const onCursorMove = ({ userId: incomingUserId, position }: { userId?: string; position?: { x: number; y: number } }) => {
@@ -198,6 +259,12 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
         if (!prev[incomingUserId]) return prev;
         const next = { ...prev };
         delete next[incomingUserId];
+        return next;
+      });
+      setRemoteDraftShapes((prev) => {
+        if (!prev.has(incomingUserId)) return prev;
+        const next = new Map(prev);
+        next.delete(incomingUserId);
         return next;
       });
     };
@@ -264,6 +331,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     socket.on("board:error", onBoardError);
     socket.on("board:deleted", onBoardDeleted);
     socket.on("laser:stroke", onLaserStroke);
+    socket.on("shape:draft", onShapeDraft);
     socket.on("presence:cursorMove", onCursorMove);
     socket.on("board:userLeft", onUserLeft);
     socket.on("presence:userOffline", onUserOffline);
@@ -286,6 +354,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       socket.off("board:error", onBoardError);
       socket.off("board:deleted", onBoardDeleted);
       socket.off("laser:stroke", onLaserStroke);
+      socket.off("shape:draft", onShapeDraft);
       socket.off("presence:cursorMove", onCursorMove);
       socket.off("board:userLeft", onUserLeft);
       socket.off("presence:userOffline", onUserOffline);
@@ -330,12 +399,15 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     setShapes: setShapesWithCache,
     remoteCursors,
     remoteLaserStrokes,
+    remoteDraftShapes,
     onlineUserIds,
     persistShapes,
     updateShapesLocally,
     emitCursorMove,
     emitLaserStroke,
+    emitShapeDraft,
     emitHistoryEvent,
+    syncShapesFromYDoc,
     serverReadOnly,
     forbiddenMessage,
     drawingRef,

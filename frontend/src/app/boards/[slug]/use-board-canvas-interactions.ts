@@ -49,8 +49,10 @@ type UseBoardCanvasInteractionsArgs = {
   setShapes: React.Dispatch<React.SetStateAction<BoardShape[]>>;
   updateShapesLocally: (updater: (prev: BoardShape[]) => BoardShape[]) => void;
   emitCursorMove: (position: { x: number; y: number }) => void;
+  emitShapeDraft?: (draft: BoardShape) => void;
   setLaserStrokes: React.Dispatch<React.SetStateAction<LaserStroke[]>>;
   emitLaserStroke?: (stroke: { id: string; points: number[]; color: string; strokeWidth: number }) => void;
+  onDrawingEnd?: () => void;
   onTextCreated?: (shapeId: string, shapeData: { x: number; y: number; fontSize: number; fontFamily: string; color: string }) => void;
   drawingRef: React.MutableRefObject<boolean>;
   onMarqueeSelect?: (rect: MarqueeRect) => void;
@@ -65,8 +67,10 @@ export const useBoardCanvasInteractions = ({
   setShapes,
   updateShapesLocally,
   emitCursorMove,
+  emitShapeDraft,
   setLaserStrokes,
   emitLaserStroke,
+  onDrawingEnd,
   onTextCreated,
   drawingRef,
   onMarqueeSelect,
@@ -83,6 +87,8 @@ export const useBoardCanvasInteractions = ({
   const selectedToolRef = useRef(selectedTool);
   const colorRef = useRef(color);
   const strokeWidthRef = useRef(strokeWidth);
+  const emitShapeDraftRef = useRef(emitShapeDraft);
+  const onDrawingEndRef = useRef(onDrawingEnd);
   const panStart = useRef({ x: 0, y: 0 });
   const viewportStart = useRef({ x: 0, y: 0 });
   const draftShapeId = useRef<string | null>(null);
@@ -103,6 +109,14 @@ export const useBoardCanvasInteractions = ({
   useEffect(() => {
     strokeWidthRef.current = strokeWidth;
   }, [strokeWidth]);
+
+  useEffect(() => {
+    emitShapeDraftRef.current = emitShapeDraft;
+  }, [emitShapeDraft]);
+
+  useEffect(() => {
+    onDrawingEndRef.current = onDrawingEnd;
+  }, [onDrawingEnd]);
 
   const canEditRef = useRef(canEdit);
   useEffect(() => {
@@ -419,57 +433,68 @@ export const useBoardCanvasInteractions = ({
       return;
     }
 
+    let emitted: BoardShape | null = null;
     setShapes((prev) => {
       const next = prev.map((shape) => {
         if (shape.id !== targetId) return shape;
 
         if (shape.type === "line") {
-          // For straight line/arrow: use start point from shape, end from pointer
           if (shape.tool === "line" || shape.tool === "arrow") {
-            return {
+            const updated = {
               ...shape,
               points: [shape.points[0] ?? pointer.x, shape.points[1] ?? pointer.y, pointer.x, pointer.y],
             };
+            emitted = updated;
+            return updated;
           }
-          // For pen, keep adding points
-          return {
+          const updated = {
             ...shape,
             points: [...shape.points, pointer.x, pointer.y],
           };
+          emitted = updated;
+          return updated;
         }
 
         if (shape.type === "rectangle") {
-          return {
+          const updated = {
             ...shape,
             width: pointer.x - shape.x,
             height: pointer.y - shape.y,
           };
+          emitted = updated;
+          return updated;
         }
 
         if (shape.type === "circle") {
           const dx = pointer.x - shape.x;
           const dy = pointer.y - shape.y;
-          return {
+          const updated = {
             ...shape,
             radius: Math.sqrt(dx * dx + dy * dy),
           };
+          emitted = updated;
+          return updated;
         }
 
         if (shape.type === "ellipse") {
           const dx = Math.abs(pointer.x - shape.x);
           const dy = Math.abs(pointer.y - shape.y);
-          return {
+          const updated = {
             ...shape,
             radiusX: dx,
             radiusY: dy,
           };
+          emitted = updated;
+          return updated;
         }
 
         return shape;
       });
-
       return next;
     });
+    if (emitted && emitShapeDraftRef.current) {
+      emitShapeDraftRef.current(emitted);
+    }
   };
 
   const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
@@ -519,6 +544,9 @@ export const useBoardCanvasInteractions = ({
     draftShapeId.current = null;
     laserDraftId.current = null;
     lastDrawPoint.current = null;
+
+    // Sync remote shapes that arrived during drawing
+    onDrawingEndRef.current?.();
 
     if (currentTool === "laser" && laserId) {
       const timer = window.setTimeout(() => {

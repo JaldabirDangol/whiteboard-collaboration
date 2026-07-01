@@ -21,6 +21,10 @@ const persistCounters = new Map<string, number>();
 const roomMembers = new Map<string, Set<string>>();
 
 const SHAPES_KEY = "shapes";
+const SHAPE_KEY_PREFIX = "shape:";
+const isShapeKey = (key: string) => key.startsWith(SHAPE_KEY_PREFIX);
+const shapeKeyForId = (id: string) => `${SHAPE_KEY_PREFIX}${id}`;
+const idFromShapeKey = (key: string) => key.slice(SHAPE_KEY_PREFIX.length);
 const CLIENT_UPDATE_ORIGIN = "client-update";
 const UNDO_REDO_ORIGIN = "undo-redo";
 const PERSIST_DEBOUNCE_MS = 500;
@@ -76,8 +80,27 @@ const toUint8 = (value: unknown): Uint8Array => {
 
 const parseShapesFromYDoc = (doc: Y.Doc) => {
   const boardMap = doc.getMap<string>("board");
-  const rawShapes = boardMap.get(SHAPES_KEY);
+  const shapeKeys = Array.from(boardMap.keys()).filter(isShapeKey);
 
+  if (shapeKeys.length > 0) {
+    const shapes: unknown[] = [];
+    for (const key of shapeKeys) {
+      const value = boardMap.get(key);
+      if (typeof value === "string") {
+        try {
+          const parsed = JSON.parse(value);
+          if (parsed && typeof parsed === "object") {
+            shapes.push(parsed);
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+    return shapes;
+  }
+
+  const rawShapes = boardMap.get(SHAPES_KEY);
   if (!rawShapes || typeof rawShapes !== "string") {
     return [];
   }
@@ -91,7 +114,21 @@ const parseShapesFromYDoc = (doc: Y.Doc) => {
 };
 
 const applyShapesToDoc = (doc: Y.Doc, shapes: unknown[]) => {
-  doc.getMap<string>("board").set(SHAPES_KEY, JSON.stringify(shapes));
+  const boardMap = doc.getMap<string>("board");
+  // Clean up old format
+  if (boardMap.has(SHAPES_KEY)) {
+    boardMap.delete(SHAPES_KEY);
+  }
+  // Remove existing shape keys
+  for (const key of Array.from(boardMap.keys()).filter(isShapeKey)) {
+    boardMap.delete(key);
+  }
+  // Write per-shape entries
+  for (const shape of shapes) {
+    const shapeObj = shape as Record<string, unknown>;
+    const id = typeof shapeObj.id === "string" ? shapeObj.id : `shape-${Math.random().toString(36).slice(2)}`;
+    boardMap.set(shapeKeyForId(id), JSON.stringify(shapeObj));
+  }
 };
 
 const extractShapesFromSnapshot = (snapshot: { data?: unknown } | null) => {
@@ -114,7 +151,10 @@ const hydrateDocFromPersistence = async (boardId: string, doc: Y.Doc) => {
 
   const shapesFromDb = await getBoardShapesFromDatabase(boardId);
   if (shapesFromDb.length > 0) {
-    boardMap.set(SHAPES_KEY, JSON.stringify(shapesFromDb));
+    for (const shape of shapesFromDb) {
+      const sid = typeof shape.id === "string" ? shape.id : `shape-${Math.random().toString(36).slice(2)}`;
+      boardMap.set(shapeKeyForId(sid), JSON.stringify(shape));
+    }
     return;
   }
 
@@ -129,7 +169,11 @@ const hydrateDocFromPersistence = async (boardId: string, doc: Y.Doc) => {
     return;
   }
 
-  boardMap.set(SHAPES_KEY, JSON.stringify(shapes));
+  for (const shape of shapes) {
+    const shapeObj = shape as Record<string, unknown>;
+    const sid = typeof shapeObj.id === "string" ? shapeObj.id : `shape-${Math.random().toString(36).slice(2)}`;
+    boardMap.set(shapeKeyForId(sid), JSON.stringify(shapeObj));
+  }
 };
 
 const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string, forceSnapshot = false, logShapeChanges = false) => {
@@ -265,6 +309,15 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         message: "Failed to apply update",
       });
     }
+  });
+
+  // 2b. Shape draft relay — transient in-progress drawing previews
+  socket.on("shape:draft", ({ boardId, draft }: { boardId: string; draft: unknown }) => {
+    if (!validateBoardId(boardId, socket)) return;
+    socket.to(boardId).emit("shape:draft", {
+      draft,
+      userId: socket.data.user?.id,
+    });
   });
 
   socket.on("board:undo", async ({ boardId }: { boardId: string }) => {

@@ -1,8 +1,13 @@
+import type * as Y from "yjs";
 import type { BoardShape } from "./board-types";
 
 export const LOCAL_ORIGIN = "local";
 export const REMOTE_ORIGIN = "remote";
 export const SHAPES_KEY = "shapes";
+export const SHAPE_KEY_PREFIX = "shape:";
+export const isShapeKey = (key: string) => key.startsWith(SHAPE_KEY_PREFIX);
+export const shapeKeyForId = (id: string) => `${SHAPE_KEY_PREFIX}${id}`;
+export const idFromShapeKey = (key: string) => key.slice(SHAPE_KEY_PREFIX.length);
 
 const toFiniteNumber = (value: unknown, fallback: number) => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -164,6 +169,24 @@ export const normalizeShapesForClient = (rawShapes: unknown[]): BoardShape[] => 
       id: `${baseId}__dup_${count}`,
     }];
   });
+};
+
+export const readShapesFromYBoard = (yBoard: Y.Map<string>): BoardShape[] => {
+  const shapes: BoardShape[] = [];
+  for (const [key, value] of yBoard.entries()) {
+    if (isShapeKey(key) && typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === "object") {
+          const normalized = normalizeShapesForClient([parsed]);
+          shapes.push(...normalized);
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return shapes;
 };
 
 export const toUint8 = (value: unknown): Uint8Array => {

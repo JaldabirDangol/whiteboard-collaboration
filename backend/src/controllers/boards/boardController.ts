@@ -159,7 +159,7 @@ export async function shareBoard(req: Request, res: Response) {
       `You've been invited as ${nextRole.toLowerCase()} to "${board?.title ?? "a board"}"`,
       boardId,
       { sharedBy: ownerUserId, role: nextRole }
-    ).catch(() => {});
+    ).catch((err) => console.error("[createNotification] Failed to create notification:", err));
 
     return res.json({
       message: "Board shared successfully",

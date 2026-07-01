@@ -38,7 +38,7 @@ export const createComment = async (data: {
         throw new Error("Shape not found in database");
       }
 
-      return await prisma.comment.create({
+      const created = await prisma.comment.create({
         data: {
           boardId: data.boardId,
           shapeId: dbShapeId,
@@ -53,8 +53,17 @@ export const createComment = async (data: {
               email: true,
             },
           },
+          shape: {
+            select: { data: true },
+          },
         },
       });
+
+      return {
+        ...created,
+        clientShapeId: ((created.shape?.data as Record<string, unknown> | null)?.id as string) ?? created.shapeId,
+        shape: undefined,
+      };
     } catch (err) {
       const prismaErr = err as { code?: string };
       if (prismaErr.code === "P2003" && attempt < 2) {
@@ -97,11 +106,21 @@ export const getCommentsByBoard = async (boardId: string, skip?: number, take?: 
             email: true,
           },
         },
+        shape: {
+          select: { data: true },
+        },
       },
     }),
     prisma.comment.count({ where: { boardId } }),
   ]);
-  return { comments, total };
+
+  const mapped = comments.map((c) => ({
+    ...c,
+    clientShapeId: ((c.shape?.data as Record<string, unknown> | null)?.id as string) ?? c.shapeId,
+    shape: undefined,
+  }));
+
+  return { comments: mapped, total };
 }
 
 export const getCommentById = async (id: string) => {

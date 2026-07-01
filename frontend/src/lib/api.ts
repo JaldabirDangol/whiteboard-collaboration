@@ -430,6 +430,7 @@ export type BoardComment = {
   content: string;
   createdAt: string;
   updatedAt: string;
+  clientShapeId?: string;
   user?: {
     id: string;
     name: string | null;

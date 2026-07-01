@@ -45,12 +45,14 @@ export default function NotificationBell() {
 
   useEffect(() => {
     const socket = acquireSocket();
-    const handler = () => {
+    const refetch = () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     };
-    socket.on("notification:new", handler);
+    socket.on("notification:new", refetch);
+    socket.on("connect", refetch);
     return () => {
-      socket.off("notification:new", handler);
+      socket.off("notification:new", refetch);
+      socket.off("connect", refetch);
       releaseSocket();
     };
   }, [queryClient]);

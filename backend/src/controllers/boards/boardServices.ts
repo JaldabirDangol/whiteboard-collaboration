@@ -266,6 +266,7 @@ export async function replaceBoardShapes(
 
   const incomingIds = new Set(valid.map((s) => s.id as string));
   let orphanedComments: { commentId: string; shapeId: string }[] = [];
+  let changedShapesCount = 0;
 
   await prisma.$transaction(async (tx) => {
     const existing = await tx.shape.findMany({
@@ -304,6 +305,8 @@ export async function replaceBoardShapes(
       return existingDataByDbId.get(dbId) !== JSON.stringify(shape);
     });
 
+    changedShapesCount = changedShapes.length;
+
     if (changedShapes.length > 0) {
       const valueRows = changedShapes.map((shape) => ({
         id: clientToDb.get(shape.id as string) ?? shape.id as string,
@@ -329,7 +332,7 @@ export async function replaceBoardShapes(
     }
   }, { timeout: 30_000 });
 
-  return { count: changedShapes.length, orphanedComments };
+  return { count: changedShapesCount, orphanedComments };
 }
 
 export async function getLatestBoardSnapshot(boardId: string) {

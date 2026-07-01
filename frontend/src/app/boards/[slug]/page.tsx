@@ -458,6 +458,11 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     if (tab === "History") {
       setHistoryOpen(true);
     }
+
+    if (tab === "Canvas") {
+      setExportOpen(false);
+      setHistoryOpen(false);
+    }
   };
 
   const members = (boardDetails?.members ?? []).map((member) => {

@@ -61,7 +61,7 @@ export default function ShapeComments({
         const data = await getBoardComments(boardId);
         if (!ignore) {
           const filtered = shapeId
-            ? data.filter((c) => c.shapeId === shapeId)
+            ? data.filter((c) => (c.clientShapeId ?? c.shapeId) === shapeId)
             : data;
           setComments(filtered);
         }
@@ -88,7 +88,8 @@ export default function ShapeComments({
     socketRef.current = socket;
 
     const onCommentNew = (comment: BoardComment) => {
-      if (shapeId && comment.shapeId !== shapeId) return;
+      const commentShapeKey = comment.clientShapeId ?? comment.shapeId;
+      if (shapeId && commentShapeKey !== shapeId) return;
       setComments((prev) => {
         if (prev.some((c) => c.id === comment.id)) return prev;
         return [...prev, comment];

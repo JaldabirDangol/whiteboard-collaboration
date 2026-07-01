@@ -275,7 +275,7 @@ export async function replaceBoardShapes(
   boardId: string,
   userId: string | undefined,
   shapes: Record<string, unknown>[]
-): Promise<{ count: number; created: number; updated: number; deleted: number; orphanedComments: { commentId: string; shapeId: string }[] }> {
+): Promise<{ count: number; created: number; updated: number; deleted: number; createdTypes: string[]; updatedTypes: string[]; deletedTypes: string[]; orphanedComments: { commentId: string; shapeId: string }[] }> {
   const valid = shapes.filter((s) => typeof s === "object" && s !== null);
   if (valid.length === 0) {
     const existingCount = await prisma.shape.count({ where: { boardId } });
@@ -283,8 +283,13 @@ export async function replaceBoardShapes(
       where: { boardId },
       select: { id: true, shapeId: true },
     });
+    const shapesWithType = await prisma.shape.findMany({
+      where: { boardId },
+      select: { type: true },
+    });
+    const deletedTypes = shapesWithType.map(s => s.type.toLowerCase());
     await prisma.shape.deleteMany({ where: { boardId } });
-    return { count: 0, created: 0, updated: 0, deleted: existingCount, orphanedComments };
+    return { count: 0, created: 0, updated: 0, deleted: existingCount, createdTypes: [], updatedTypes: [], deletedTypes, orphanedComments };
   }
 
   let resolvedUserId = userId;
@@ -297,7 +302,7 @@ export async function replaceBoardShapes(
     resolvedUserId = member?.userId;
   }
   if (!resolvedUserId) {
-    return { count: 0, created: 0, updated: 0, deleted: 0, orphanedComments: [] };
+    return { count: 0, created: 0, updated: 0, deleted: 0, createdTypes: [], updatedTypes: [], deletedTypes: [], orphanedComments: [] };
   }
 
   const incomingIds = new Set(valid.map((s) => s.id as string));
@@ -305,16 +310,21 @@ export async function replaceBoardShapes(
   let createdCount = 0;
   let updatedCount = 0;
   let deletedCount = 0;
+  const createdTypes: string[] = [];
+  const updatedTypes: string[] = [];
+  const deletedTypes: string[] = [];
 
   await prisma.$transaction(async (tx) => {
     const existing = await tx.shape.findMany({
       where: { boardId },
-      select: { id: true, data: true, userId: true },
+      select: { id: true, data: true, userId: true, type: true },
     });
     const clientToDb = new Map<string, string>();
     const existingDataByDbId = new Map<string, string>();
+    const existingTypeByDbId = new Map<string, string>();
     for (const ex of existing) {
       existingDataByDbId.set(ex.id, JSON.stringify(ex.data));
+      existingTypeByDbId.set(ex.id, ex.type.toLowerCase());
       const clientId = (ex.data as Record<string, unknown> | null)?.id as string | undefined;
       if (clientId) clientToDb.set(clientId, ex.id);
     }
@@ -327,6 +337,10 @@ export async function replaceBoardShapes(
       .map((ex) => ex.id);
 
     if (toDeleteIds.length > 0) {
+      for (const delId of toDeleteIds) {
+        const t = existingTypeByDbId.get(delId);
+        if (t) deletedTypes.push(t);
+      }
       const affected = await tx.comment.findMany({
         where: { shapeId: { in: toDeleteIds } },
         select: { id: true, shapeId: true },
@@ -341,10 +355,13 @@ export async function replaceBoardShapes(
     // Only upsert shapes whose data actually changed (skip identical to reduce write amp)
     for (const shape of valid) {
       const dbId = clientToDb.get(shape.id as string);
+      const rawType = typeof shape.type === "string" ? shape.type.toLowerCase() : "draw";
       if (!dbId) {
         createdCount++;
+        createdTypes.push(rawType);
       } else if (existingDataByDbId.get(dbId) !== JSON.stringify(shape)) {
         updatedCount++;
+        updatedTypes.push(rawType);
       } else {
         continue; // unchanged, skip
       }
@@ -363,7 +380,7 @@ export async function replaceBoardShapes(
     }
   }, { timeout: 30_000 });
 
-  return { count: createdCount + updatedCount, created: createdCount, updated: updatedCount, deleted: deletedCount, orphanedComments };
+  return { count: createdCount + updatedCount, created: createdCount, updated: updatedCount, deleted: deletedCount, createdTypes, updatedTypes, deletedTypes, orphanedComments };
 }
 
 export async function getLatestBoardSnapshot(boardId: string) {

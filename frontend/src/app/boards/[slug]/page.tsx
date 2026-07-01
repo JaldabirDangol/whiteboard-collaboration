@@ -62,6 +62,7 @@ export default function Page() {
   const [rightPanelTab, setRightPanelTab] = useState<"activity" | "chat" | "comments">("chat");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
+  const [followUserId, setFollowUserId] = useState<string | null>(null);
   const [draftDisplayName, setDraftDisplayName] = useState("");
 
   const toggleFullscreen = () => {
@@ -152,6 +153,10 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     };
   }, [shapes]);
 
+  const handleCanvasInteraction = useCallback(() => {
+    if (followUserId) setFollowUserId(null);
+  }, [followUserId]);
+
   const {
     zoom,
     setZoom,
@@ -177,6 +182,8 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     setLaserStrokes,
     emitLaserStroke,
     onDrawingEnd: syncShapesFromYDoc,
+    onCanvasInteraction: handleCanvasInteraction,
+    onEmptyCanvasClick: () => setSelectedShapeIds(new Set()),
     drawingRef,
     snapToGrid: showGrid,
     onTextCreated: (shapeId, shapeData) => {
@@ -194,6 +201,38 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
       setSelectedShapeIds(new Set(ids));
     },
   });
+
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const stageSizeRef = useRef(stageSize);
+  stageSizeRef.current = stageSize;
+
+  const centerOnPoint = useCallback((wx: number, wy: number) => {
+    const cz = zoomRef.current;
+    const cs = stageSizeRef.current;
+    setViewport({
+      x: cs.width / 2 - wx * cz,
+      y: cs.height / 2 - wy * cz,
+    });
+  }, []);
+
+  const handleGoToUser = useCallback((targetUserId: string) => {
+    const cursor = remoteCursors[targetUserId];
+    if (!cursor) return;
+    centerOnPoint(cursor.x, cursor.y);
+  }, [remoteCursors, centerOnPoint]);
+
+  const handleFollowUser = useCallback((userId: string | null) => {
+    setFollowUserId(userId);
+  }, []);
+
+  // Auto-follow: keep viewport centered on followed user's cursor
+  useEffect(() => {
+    if (!followUserId) return;
+    const cursor = remoteCursors[followUserId];
+    if (!cursor) return;
+    centerOnPoint(cursor.x, cursor.y);
+  }, [followUserId, remoteCursors, centerOnPoint]);
 
   const cursorLabelByUserId = useMemo(() => {
     const labels: Record<string, string> = {};
@@ -1052,13 +1091,6 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
             onTouchEnd={handlePointerUp}
             onTouchCancel={handlePointerUp}
             onWheel={handleWheel}
-              onMouseDownCapture={(e: KonvaEventObject<MouseEvent>) => {
-                if (!e.evt.shiftKey) {
-                  if ((e.target as KonvaNode).nodeType === "Stage") {
-                    setSelectedShapeIds(new Set());
-                  }
-                }
-              }}
           >
             <Layer>
               <Rect
@@ -1074,6 +1106,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                   const shapeCommentCount = commentCounts?.[shape.id] ?? 0;
                   if (shape.type === "line") {
                     const isArrow = shape.tool === "arrow";
+                    const arrowLen = Math.hypot(shape.points[2] - shape.points[0], shape.points[3] - shape.points[1]);
                     return isArrow ? (
                       <Arrow
                         key={shape.id}
@@ -1081,8 +1114,8 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                         points={shape.points}
                         stroke={shape.color}
                         strokeWidth={shape.strokeWidth}
-                        pointerLength={10}
-                        pointerWidth={8}
+                        pointerLength={Math.max(8, Math.min(arrowLen * 0.15, 30))}
+                        pointerWidth={Math.max(6, Math.min(arrowLen * 0.1, 24))}
                         fill={shape.color}
                         lineCap="round"
                         lineJoin="round"
@@ -1548,6 +1581,9 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
           selectedShapeId={commentTargetShapeId}
           shapeTypeMap={shapeTypeMap}
           onlineUserIds={onlineUserIds}
+          onGoToUser={handleGoToUser}
+          followUserId={followUserId}
+          onFollowUser={handleFollowUser}
         />
 
         <BoardMobileChat boardId={id} currentUserId={user?.id} chatOpen={chatOpen} onClose={() => setChatOpen(false)} />

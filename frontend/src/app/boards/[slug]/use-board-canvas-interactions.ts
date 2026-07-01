@@ -53,6 +53,8 @@ type UseBoardCanvasInteractionsArgs = {
   setLaserStrokes: React.Dispatch<React.SetStateAction<LaserStroke[]>>;
   emitLaserStroke?: (stroke: { id: string; points: number[]; color: string; strokeWidth: number }) => void;
   onDrawingEnd?: () => void;
+  onCanvasInteraction?: () => void;
+  onEmptyCanvasClick?: () => void;
   onTextCreated?: (shapeId: string, shapeData: { x: number; y: number; fontSize: number; fontFamily: string; color: string }) => void;
   drawingRef: React.MutableRefObject<boolean>;
   onMarqueeSelect?: (rect: MarqueeRect) => void;
@@ -71,6 +73,8 @@ export const useBoardCanvasInteractions = ({
   setLaserStrokes,
   emitLaserStroke,
   onDrawingEnd,
+  onCanvasInteraction,
+  onEmptyCanvasClick,
   onTextCreated,
   drawingRef,
   onMarqueeSelect,
@@ -89,6 +93,8 @@ export const useBoardCanvasInteractions = ({
   const strokeWidthRef = useRef(strokeWidth);
   const emitShapeDraftRef = useRef(emitShapeDraft);
   const onDrawingEndRef = useRef(onDrawingEnd);
+  const onCanvasInteractionRef = useRef(onCanvasInteraction);
+  const onEmptyCanvasClickRef = useRef(onEmptyCanvasClick);
   const panStart = useRef({ x: 0, y: 0 });
   const viewportStart = useRef({ x: 0, y: 0 });
   const draftShapeId = useRef<string | null>(null);
@@ -117,6 +123,14 @@ export const useBoardCanvasInteractions = ({
   useEffect(() => {
     onDrawingEndRef.current = onDrawingEnd;
   }, [onDrawingEnd]);
+
+  useEffect(() => {
+    onCanvasInteractionRef.current = onCanvasInteraction;
+  }, [onCanvasInteraction]);
+
+  useEffect(() => {
+    onEmptyCanvasClickRef.current = onEmptyCanvasClick;
+  }, [onEmptyCanvasClick]);
 
   const canEditRef = useRef(canEdit);
   useEffect(() => {
@@ -208,8 +222,12 @@ export const useBoardCanvasInteractions = ({
 
     if (!canEditRef.current) return;
 
+    onCanvasInteractionRef.current?.();
+
     // Clicking on a shape node — skip drawing, let shape onClick handle selection
     if (e.target !== e.target.getStage()) return;
+
+    onEmptyCanvasClickRef.current?.();
 
     const pointer = getWorldPointer(e);
     if (!pointer) return;
@@ -499,6 +517,8 @@ export const useBoardCanvasInteractions = ({
 
   const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
+
+    onCanvasInteractionRef.current?.();
 
     if (!(e.evt.ctrlKey || e.evt.metaKey)) {
       setViewport((prev) => ({

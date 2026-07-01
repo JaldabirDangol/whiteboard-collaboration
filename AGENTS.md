@@ -36,7 +36,7 @@ Postinstall hook auto-runs `prisma generate`.
 
 ## Architecture notes
 
-- **Yjs**: One `Y.Doc` per board, stored in a process-level `Map<string, Y.Doc>`. Board shapes live in `Y.Map("board")` key `"shapes"` as a JSON string.
+- **Yjs**: One `Y.Doc` per board, stored in a process-level `Map<string, Y.Doc>`. Board shapes live in `Y.Map("board")` as individual `shape:<uuid>` entries (JSON string values). Old single `"shapes"` blob key deleted on first write. `readShapesFromYBoard()` iterates `shape:*` keys.
 
 - **RBAC**: Socket and REST both check `ADMIN`/`EDITOR`/`VIEWER` roles. VIEWER is forced select-only on canvas.
 - **Undo/redo**: Server-side `Y.UndoManager` per board; full state emitted on `board:state` after operation.
@@ -57,11 +57,18 @@ Postinstall hook auto-runs `prisma generate`.
 - **BoardMember.userId**: `onDelete: Cascade` — membership auto-deleted when user is removed.
 - **Socket event naming**: `namespace:action` pattern (e.g. `board:join`, `presence:cursorMove`).
 
+## Session 1 (uncommitted)
+
+- `replaceBoardShapes` returns `createdTypes/updatedTypes/deletedTypes` (shape type strings). Activity feed shows "drew a rectangle" instead of "added".
+- `persistBoardStateNow` reordered: `replaceBoardShapes` runs first, snapshot saved only on `hasChanges` (or `forceSnapshot`). No-op skips counter increment + snapshot.
+- `boardRestore.ts` `applyShapesToDoc` now writes per-shape `shape:<uuid>` keys (matching boardEvent.ts). Old `"shapes"` blob key is deleted.
+- **Go-to-user / Follow mode**: Left-click avatar → centers viewport on cursor. Right-click → toggle follow. Follow stops on any canvas interaction. "Stop following" button.
+- **Empty canvas deselection**: `onEmptyCanvasClick` callback in `handlePointerDown` when `e.target === e.target.getStage()`. Removed broken `onMouseDownCapture`.
+- `syncShapesFromYDoc` replaces `applySnapshot` in `page.tsx` `onDrawingEnd` — preserves local draft shapes while merging remote committed shapes.
+
 ## Fixed debt
 
 - Write amplification: `replaceBoardShapes` skips unchanged shapes (compares serialized JSON before upserting)
-- FK mismatch: `Comment.shapeId` vs `Shape.id` — client-side UUIDs now used as DB IDs; `commentService` resolves via `findUnique` then `data->>'id'` fallback
-- Redundant `id` in `Shape.data`: stripped on write, restored on read
 
 See `frontend/CLAUDE.md` for full architecture reference (344 lines).
 

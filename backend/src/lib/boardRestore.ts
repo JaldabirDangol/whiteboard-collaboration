@@ -9,6 +9,9 @@ import {
 import { logAction } from "@/lib/auditLog.js";
 
 const SHAPES_KEY = "shapes";
+const SHAPE_KEY_PREFIX = "shape:";
+const isShapeKey = (key: string) => key.startsWith(SHAPE_KEY_PREFIX);
+const shapeKeyForId = (id: string) => `${SHAPE_KEY_PREFIX}${id}`;
 const UNDO_REDO_ORIGIN = "undo-redo";
 
 function extractShapesFromSnapshot(snapshot: { data?: unknown } | null) {
@@ -21,7 +24,18 @@ function extractShapesFromSnapshot(snapshot: { data?: unknown } | null) {
 }
 
 function applyShapesToDoc(doc: Y.Doc, shapes: unknown[]) {
-  doc.getMap<string>("board").set(SHAPES_KEY, JSON.stringify(shapes));
+  const boardMap = doc.getMap<string>("board");
+  if (boardMap.has(SHAPES_KEY)) {
+    boardMap.delete(SHAPES_KEY);
+  }
+  for (const key of Array.from(boardMap.keys()).filter(isShapeKey)) {
+    boardMap.delete(key);
+  }
+  for (const shape of shapes) {
+    const shapeObj = shape as Record<string, unknown>;
+    const id = typeof shapeObj.id === "string" ? shapeObj.id : `shape-${Math.random().toString(36).slice(2)}`;
+    boardMap.set(shapeKeyForId(id), JSON.stringify(shapeObj));
+  }
 }
 
 export async function restoreSnapshot(boardId: string, userId: string, snapshotId: string) {

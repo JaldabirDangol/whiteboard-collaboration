@@ -180,14 +180,7 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
   try {
     const shapes = parseShapesFromYDoc(doc);
 
-    // Save snapshot only every N persists (or on forced flush like board:leave/disconnect)
-    const count = (persistCounters.get(boardId) ?? 0) + 1;
-    persistCounters.set(boardId, count);
-    if (forceSnapshot || count === 1 || count % SNAPSHOT_INTERVAL === 0) {
-      await saveBoardSnapshot(boardId, { shapes });
-    }
-
-    const { orphanedComments, created, updated, deleted } = await replaceBoardShapes(boardId, userId, shapes as Record<string, unknown>[]);
+    const { orphanedComments, created, updated, deleted, createdTypes, updatedTypes, deletedTypes } = await replaceBoardShapes(boardId, userId, shapes as Record<string, unknown>[]);
     if (orphanedComments.length > 0) {
       const io = getIO();
       for (const { commentId, shapeId } of orphanedComments) {
@@ -195,7 +188,22 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
       }
     }
 
-    if (logShapeChanges && userId && (created > 0 || updated > 0 || deleted > 0)) {
+    // Only save snapshot on actual changes (or forced flush for undo/redo/leave/disconnect)
+    const hasChanges = created > 0 || updated > 0 || deleted > 0;
+    if (forceSnapshot || hasChanges) {
+      const count = (persistCounters.get(boardId) ?? 0) + 1;
+      persistCounters.set(boardId, count);
+      if (forceSnapshot || count === 1 || count % SNAPSHOT_INTERVAL === 0) {
+        await saveBoardSnapshot(boardId, { shapes });
+      }
+    }
+
+    if (logShapeChanges && userId && hasChanges) {
+      const singleType =
+        created === 1 && updated === 0 && deleted === 0 ? createdTypes[0] ?? null
+        : updated === 1 && created === 0 && deleted === 0 ? updatedTypes[0] ?? null
+        : deleted === 1 && created === 0 && updated === 0 ? deletedTypes[0] ?? null
+        : null;
       logAction({
         boardId,
         userId,
@@ -208,7 +216,7 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
           created,
           updated,
           deleted,
-          type: shapes.length === 1 ? (shapes[0] as Record<string, unknown> | null)?.type ?? null : null,
+          type: singleType,
         },
       }).catch(() => {});
     }

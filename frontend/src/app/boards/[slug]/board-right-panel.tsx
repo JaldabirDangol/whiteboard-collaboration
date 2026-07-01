@@ -18,6 +18,9 @@ type BoardRightPanelProps = {
   selectedShapeId?: string | null;
   shapeTypeMap?: Record<string, string>;
   onlineUserIds?: Set<string>;
+  onGoToUser?: (userId: string) => void;
+  followUserId?: string | null;
+  onFollowUser?: (userId: string | null) => void;
 };
 
 export default function BoardRightPanel({
@@ -29,6 +32,9 @@ export default function BoardRightPanel({
   selectedShapeId,
   shapeTypeMap,
   onlineUserIds,
+  onGoToUser,
+  followUserId,
+  onFollowUser,
 }: BoardRightPanelProps) {
   const displayMembers = members.length ? members : [{ id: "you", initials: "YO", label: "You", role: "ADMIN" }];
   const onlineCount = onlineUserIds?.size ?? 0;
@@ -46,22 +52,46 @@ export default function BoardRightPanel({
         <div className="flex flex-wrap gap-1.5">
           {displayMembers.map((member) => {
             const isOnline = onlineUserIds?.has(member.id) ?? false;
+            const isFollowed = followUserId === member.id;
             return (
-              <div
-                key={member.id}
-                title={`${member.label} (${member.role})${isOnline ? " — Online" : ""}`}
-                className="relative"
-              >
-                <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 text-[11px] font-semibold text-white ring-2 ring-white shadow-sm">
-                  {member.initials}
-                </div>
-                {isOnline && (
-                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
-                )}
+              <div key={member.id} className="relative group">
+                <button
+                  type="button"
+                  disabled={!isOnline}
+                  onClick={() => onGoToUser?.(member.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    if (isOnline) onFollowUser?.(isFollowed ? null : member.id);
+                  }}
+                  className={`relative block rounded-full transition ${
+                    isOnline ? "cursor-pointer hover:ring-2 hover:ring-indigo-400" : "cursor-default"
+                  } ${isFollowed ? "ring-2 ring-amber-400 ring-offset-1" : ""}`}
+                  title={`${member.label} (${member.role})${isOnline ? " — Online" : ""}${
+                    isFollowed ? " [Following]" : isOnline ? " — Click to go to, right-click to follow" : ""
+                  }`}
+                >
+                  <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 text-[11px] font-semibold text-white ring-2 ring-white shadow-sm">
+                    {member.initials}
+                  </div>
+                  {isOnline && (
+                    <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${
+                      isFollowed ? "bg-amber-400" : "bg-emerald-500"
+                    }`} />
+                  )}
+                </button>
               </div>
             );
           })}
         </div>
+        {followUserId && (
+          <button
+            type="button"
+            onClick={() => onFollowUser?.(null)}
+            className="mt-2 w-full rounded-lg bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200/70 hover:bg-amber-100 transition"
+          >
+            Stop following
+          </button>
+        )}
       </div>
 
       <div className="border-b border-slate-100 px-3 py-2.5">

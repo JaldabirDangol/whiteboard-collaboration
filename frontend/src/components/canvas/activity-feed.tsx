@@ -34,7 +34,7 @@ const formatTimestamp = (dateLike: string) => {
 
 const actionLabel = (action: string): string => {
   switch (action) {
-    case "object.created": return "added";
+    case "object.created": return "drew";
     case "object.updated": return "updated";
     case "object.deleted": return "removed";
     case "board.created": return "created the board";
@@ -172,7 +172,7 @@ export default function ActivityFeed({
             const total = (createdCount ?? 0) + (updatedCount ?? 0) + (deletedCount ?? 0);
             if (total > 1) {
               const parts: string[] = [];
-              if (createdCount) parts.push(`${createdCount} added`);
+              if (createdCount) parts.push(`${createdCount} ${entry.action === "object.created" ? "drew" : "added"}`);
               if (updatedCount) parts.push(`${updatedCount} updated`);
               if (deletedCount) parts.push(`${deletedCount} removed`);
               detail = parts.join(", ");

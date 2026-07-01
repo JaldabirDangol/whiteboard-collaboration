@@ -1,0 +1,209 @@
+@startuml Class_Diagram
+
+skinparam classAttributeIconSize 0
+
+class User {
+  - id: String
+  - email: String
+  - name: String?
+  - password: String?
+  + login()
+  + logout()
+  + acceptInvitation()
+}
+
+class Board {
+  - id: String
+  - title: String
+  - creatorId: String
+  - thumbnailUrl: String?
+  - currentSnapshotVersion: Int?
+  + addMember(user, role)
+  + removeMember(userId)
+}
+
+class BoardMember {
+  - id: String
+  - userId: String
+  - boardId: String
+  - role: Role
+  - isStarred: Boolean
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+class Shape {
+  - id: String
+  - boardId: String
+  - userId: String
+  - type: ShapeType
+  - data: Json
+}
+
+enum ShapeType {
+  RECTANGLE
+  CIRCLE
+  LINE
+  ARROW
+  TEXT
+  DRAW
+  IMAGE
+}
+
+class Snapshot {
+  - id: String
+  - boardId: String
+  - version: Int
+  - data: Json
+}
+
+class Comment {
+  - id: String
+  - boardId: String
+  - shapeId: String
+  - userId: String
+  - content: String
+}
+
+class Message {
+  - id: String
+  - boardId: String
+  - userId: String
+  - content: String
+}
+
+class AuditLog {
+  - id: String
+  - boardId: String
+  - userId: String
+  - action: String
+  - metadata: Json?
+}
+
+class Notification {
+  - id: String
+  - userId: String
+  - boardId: String?
+  - type: String
+  - message: String
+  - metadata: Json?
+  - readAt: DateTime?
+}
+
+' --- Frontend Types ---
+
+abstract class BoardShape {
+  + id: String
+  + color: String
+  + strokeWidth: Int
+  + fill: String?
+  + getAABB(): Rect
+}
+
+class LineShape {
+  + type: "line"
+  + tool: "pen" | "eraser" | "line" | "arrow"
+  + points: Number[]
+}
+
+class RectShape {
+  + type: "rectangle"
+  + x: Number
+  + y: Number
+  + width: Number
+  + height: Number
+}
+
+class CircleShape {
+  + type: "circle"
+  + x: Number
+  + y: Number
+  + radius: Number
+}
+
+class EllipseShape {
+  + type: "ellipse"
+  + x: Number
+  + y: Number
+  + radiusX: Number
+  + radiusY: Number
+}
+
+class TextShape {
+  + type: "text"
+  + x: Number
+  + y: Number
+  + text: String
+  + fontSize: Number
+  + fontFamily: String?
+}
+
+class ImageShape {
+  + type: "image"
+  + x: Number
+  + y: Number
+  + width: Number
+  + height: Number
+  + url: String
+}
+
+' --- Backend Services ---
+
+class YDocManager {
+  - docs: LRUCache<String, Y.Doc>
+  + getYDoc(boardId): Y.Doc
+  + destroyYDoc(boardId)
+}
+
+class LRUCache {
+  - capacity: Int
+  - map: Map<K, Node<K,V>>
+  - head: Node<K,V>
+  - tail: Node<K,V>
+  + get(key): V?
+  + set(key, value)
+  + delete(key): Boolean
+}
+
+class Quadtree {
+  - capacity: Int
+  - bounds: Rect
+  - items: T[]
+  - children: Quadtree[4]
+  + insert(shape, aabb)
+  + query(rect): T[]
+  + rebuild(shapes)
+}
+
+class RateLimiter {
+  - entries: Map<String, Timestamps[]>
+  + checkRateLimit(socketId, event): Boolean
+}
+
+' --- Relationships ---
+
+BoardShape <|-- LineShape
+BoardShape <|-- RectShape
+BoardShape <|-- CircleShape
+BoardShape <|-- EllipseShape
+BoardShape <|-- TextShape
+BoardShape <|-- ImageShape
+
+User "1" -- "0..*" Board : creates
+User "1" -- "0..*" BoardMember : is
+Board "1" -- "0..*" BoardMember : has
+Board "1" -- "0..*" Shape : contains
+Board "1" -- "0..*" Snapshot : has
+Shape "1" -- "0..*" Comment : receives
+Board "1" -- "0..*" Message : has
+Board "1" -- "0..*" AuditLog : logs
+
+YDocManager --> LRUCache : uses
+YDocManager --> Board : manages Y.Doc per
+Quadtree --> BoardShape : indexes
+
+@enduml

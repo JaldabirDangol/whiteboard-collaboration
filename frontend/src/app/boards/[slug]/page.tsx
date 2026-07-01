@@ -23,6 +23,7 @@ import BoardMobileChat from "./board-mobile-chat";
 import { useBoardRealtime } from "./use-board-realtime";
 import { useBoardCanvasInteractions, getAABB } from "./use-board-canvas-interactions";
 import { useConnectionStatus } from "@/lib/use-connection-status";
+import { Quadtree } from "@/lib/quadtree";
 
 export default function Page() {
   const params = useParams();
@@ -191,15 +192,10 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
       spawnTextarea(shapeId, "", shapeData);
     },
     onMarqueeSelect: (rect) => {
-      const ids: string[] = [];
-      for (const shape of renderedShapes) {
-        const bounds = getAABB(shape);
-        if (bounds && rect.x < bounds.x + bounds.w && rect.x + rect.width > bounds.x && rect.y < bounds.y + bounds.h && rect.y + rect.height > bounds.y) {
-          ids.push(shape.id);
-        }
-      }
+      const ids = quadtreeRef.current.query(rect).map((s) => s.id);
       setSelectedShapeIds(new Set(ids));
     },
+    getShapeIdsInRect,
   });
 
   const zoomRef = useRef(zoom);
@@ -285,6 +281,19 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     for (const s of shapes) seen.set(s.id, s);
     return Array.from(seen.values());
   }, [shapes]);
+
+  const quadtreeRef = useRef<Quadtree<BoardShape>>(null!);
+  if (!quadtreeRef.current) {
+    quadtreeRef.current = new Quadtree<BoardShape>({ x: -1e9, y: -1e9, w: 2e9, h: 2e9 });
+  }
+
+  useEffect(() => {
+    quadtreeRef.current.rebuild(renderedShapes, getAABB);
+  }, [renderedShapes]);
+
+  const getShapeIdsInRect = useCallback((rect: { x: number; y: number; w: number; h: number }) => {
+    return quadtreeRef.current.query(rect).map((s) => s.id);
+  }, []);
 
   const shapeTypeMap = useMemo(() => {
     const map: Record<string, string> = {};

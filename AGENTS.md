@@ -57,6 +57,27 @@ Postinstall hook auto-runs `prisma generate`.
 - **BoardMember.userId**: `onDelete: Cascade` — membership auto-deleted when user is removed.
 - **Socket event naming**: `namespace:action` pattern (e.g. `board:join`, `presence:cursorMove`).
 
+## Diagrams (report preparation)
+
+All 7 PlantUML diagrams in `diagrams/`:
+- `01-er-diagram.puml` — 11 entities from Prisma schema
+- `02-use-case-diagram.puml` — 16 use cases, 3 actors
+- `03-sequence-join-sync.puml` — Board join + Yjs sync + persist flow
+- `04-sequence-shape-creation.puml` — Shape drawing, eraser, undo, marquee select
+- `05-class-diagram.puml` — DB models, frontend shape types, algorithm classes
+- `06-component-diagram.puml` — Frontend/Backend/DB component layout
+- `07-deployment-diagram.puml` — Browser → Node.js → Docker → Postgres
+
+Render with PlantUML (`Alt+D` in VS Code) or paste at plantuml.com.
+
+## Tests (uncommitted)
+
+- `frontend/src/lib/__tests__/quadtree.test.ts` — 8 tests (insert, query, clear, rebuild, subdivide)
+- `backend/src/__tests__/lru-cache.test.ts` — 10 tests (eviction, promotion, size, delete, callback)
+- `backend/src/__tests__/rate-limiter.test.ts` — 8 tests (limits, per-socket isolation, sliding window)
+
+Run: `pnpm test` (frontend) / `pnpm --dir backend test` (backend)
+
 ## Session 1 (uncommitted)
 
 - `replaceBoardShapes` returns `createdTypes/updatedTypes/deletedTypes` (shape type strings). Activity feed shows "drew a rectangle" instead of "added".
@@ -69,6 +90,12 @@ Postinstall hook auto-runs `prisma generate`.
 ## Fixed debt
 
 - Write amplification: `replaceBoardShapes` skips unchanged shapes (compares serialized JSON before upserting)
+
+## DSA implementations
+
+- **LRU Cache** (`backend/src/utils/lru-cache.ts`): Doubly-linked list + HashMap. O(1) get/set/delete. `onEvict` callback for Y.Doc cleanup. Capacity=50.
+- **Quadtree** (`frontend/src/lib/quadtree.ts`): Spatial index. Recursive subdivision at capacity=4. O(log n) query vs O(n) scan. Used by marquee select and eraser tool.
+- **Rate Limiter** (`backend/src/socket/rateLimiter.ts`): Sliding window per `(socketId, event)`. Timestamp array purge + bound check. Batch cleanup every 30s.
 
 See `frontend/CLAUDE.md` for full architecture reference (344 lines).
 

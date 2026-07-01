@@ -58,6 +58,7 @@ type UseBoardCanvasInteractionsArgs = {
   onTextCreated?: (shapeId: string, shapeData: { x: number; y: number; fontSize: number; fontFamily: string; color: string }) => void;
   drawingRef: React.MutableRefObject<boolean>;
   onMarqueeSelect?: (rect: MarqueeRect) => void;
+  getShapeIdsInRect?: (rect: { x: number; y: number; w: number; h: number }) => string[];
   snapToGrid?: boolean;
 };
 
@@ -78,6 +79,7 @@ export const useBoardCanvasInteractions = ({
   onTextCreated,
   drawingRef,
   onMarqueeSelect,
+  getShapeIdsInRect,
   snapToGrid = false,
 }: UseBoardCanvasInteractionsArgs) => {
   const [zoom, setZoom] = useState(1);
@@ -95,6 +97,7 @@ export const useBoardCanvasInteractions = ({
   const onDrawingEndRef = useRef(onDrawingEnd);
   const onCanvasInteractionRef = useRef(onCanvasInteraction);
   const onEmptyCanvasClickRef = useRef(onEmptyCanvasClick);
+  const getShapeIdsInRectRef = useRef(getShapeIdsInRect);
   const panStart = useRef({ x: 0, y: 0 });
   const viewportStart = useRef({ x: 0, y: 0 });
   const draftShapeId = useRef<string | null>(null);
@@ -131,6 +134,10 @@ export const useBoardCanvasInteractions = ({
   useEffect(() => {
     onEmptyCanvasClickRef.current = onEmptyCanvasClick;
   }, [onEmptyCanvasClick]);
+
+  useEffect(() => {
+    getShapeIdsInRectRef.current = getShapeIdsInRect;
+  }, [getShapeIdsInRect]);
 
   const canEditRef = useRef(canEdit);
   useEffect(() => {
@@ -584,6 +591,12 @@ export const useBoardCanvasInteractions = ({
         if (!eraserShape || eraserShape.type !== "line") return prev.filter((s) => s.id !== draftId);
         const eraserBounds = getAABB(eraserShape);
         if (!eraserBounds) return prev.filter((s) => s.id !== draftId);
+        const getIds = getShapeIdsInRectRef.current;
+        if (getIds) {
+          const hitIds = new Set(getIds(eraserBounds));
+          hitIds.delete(draftId);
+          return prev.filter((s) => !hitIds.has(s.id));
+        }
         return prev.filter((s) => {
           if (s.id === draftId) return false;
           const bounds = getAABB(s);

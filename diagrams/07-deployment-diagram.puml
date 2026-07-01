@@ -1,0 +1,76 @@
+@startuml Deployment_Diagram
+
+skinparam componentStyle rectangle
+
+node "Client Machine (Browser)" as Browser {
+  component "HTML/CSS/JS\n(Next.js App)" as SPA
+  component "WebSocket Client\n(Socket.IO + Yjs)" as WSClient
+  component "Canvas Renderer\n(Konva.js)" as Konva
+}
+
+node "Web Server (Node.js)" as NodeServer {
+  component "Express 5\nHTTP Server" as Express
+  component "Socket.IO\nServer" as SocketIO
+  component "Yjs CRDT\nEngine" as Yjs
+  component "Prisma ORM\nClient" as PrismaClient
+  component "LRU Cache\n(Y.Doc Pool)" as LRU
+  component "Rate Limiter" as RateLimiter
+  component "Auth Service\n(JWT + bcrypt)" as Auth
+}
+
+node "Docker Host" as DockerHost {
+  node "PostgreSQL Container\n(:5433)" as PG {
+    database "Board DB\n(whiteboard)" as Database
+  }
+}
+
+node "CDN / Cloudinary" as Cloudinary {
+  storage "Image/Asset\nStorage" as AssetStore
+}
+
+' --- Network connections ---
+
+Browser -down-> NodeServer : "HTTPS / WSS"
+Browser -down-> Cloudinary : "HTTPS (image upload)"
+
+NodeServer -down-> PG : "TCP :5433"
+NodeServer -right-> Cloudinary : "HTTPS (upload API)"
+
+' --- Internal composition ---
+
+NodeServer -- Express
+NodeServer -- SocketIO
+NodeServer -- PrismaClient
+NodeServer -- LRU
+NodeServer -- RateLimiter
+NodeServer -- Auth
+
+SocketIO -- Yjs : per-board Y.Doc
+Yjs -- LRU : evicts least used
+Express --> Auth : JWT middleware
+Express --> PrismaClient : REST queries
+SocketIO --> PrismaClient : persist shapes
+
+PrismaClient --> Database : connection pool
+
+' --- Annotations ---
+
+note left of Browser
+  Single-Page Application
+  Served via Next.js SSR/SSG
+end note
+
+note right of NodeServer
+  Environment: Linux
+  Node.js 20+
+  MAX_ACTIVE_BOARDS = 50
+  Port: 3050
+end note
+
+note right of PG
+  Docker Compose
+  Port mapping :5432→:5433
+  Persistent volume
+end note
+
+@enduml

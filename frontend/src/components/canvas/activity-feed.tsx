@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import { Activity, Loader2 } from "lucide-react";
 import { BoardActivity, getBoardActivity } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { acquireSocket, releaseSocket } from "@/lib/board-socket";
+import { describeActivityFromAction } from "@/lib/activity-description";
 
 type ActivityFeedProps = {
   boardId: string;
@@ -30,39 +31,6 @@ const formatTimestamp = (dateLike: string) => {
   if (diffDay < 7) return `${diffDay}d ago`;
 
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
-};
-
-const actionLabel = (action: string): string => {
-  switch (action) {
-    case "object.created": return "drew";
-    case "object.updated": return "updated";
-    case "object.deleted": return "removed";
-    case "board.created": return "created the board";
-    case "board.joined": return "joined the board";
-    case "board.shared": return "shared the board";
-    case "board.deleted": return "deleted the board";
-    case "board:undo": return "undid last action";
-    case "board:redo": return "redid last action";
-    case "snapshot:restore": return "restored a snapshot";
-    case "comment.created": return "commented on";
-    case "comment.deleted": return "deleted a comment on";
-    default: return action;
-  }
-};
-
-const actionTypeLabel = (type?: string): string => {
-  switch (type) {
-    case "rectangle": return "rectangle";
-    case "circle": return "circle";
-    case "ellipse": return "ellipse";
-    case "line": return "line";
-    case "arrow": return "arrow";
-    case "text": return "text";
-    case "image": return "image";
-    case "draw": return "drawing";
-    case "pen": return "drawing";
-    default: return "shape";
-  }
 };
 
 type ActivityPayload = {
@@ -159,61 +127,8 @@ export default function ActivityFeed({
 
         {resolvedActivities.map((entry) => {
           const isMine = currentUserId ? entry.userId === currentUserId : false;
-          const action = actionLabel(entry.action);
           const meta = entry.metadata ?? {};
-          const metaType = meta.type as string | undefined;
-          const shapeType = actionTypeLabel(metaType);
-          const createdCount = meta.created as number | undefined;
-          const updatedCount = meta.updated as number | undefined;
-          const deletedCount = meta.deleted as number | undefined;
-          const createdTypes = meta.createdTypes as string[] | undefined;
-          const updatedTypes = meta.updatedTypes as string[] | undefined;
-          const deletedTypes = meta.deletedTypes as string[] | undefined;
-
-          const allSameType = (types: string[] | undefined, count: number | undefined) =>
-            types && types.length === count && count > 0 && types.every(t => t === types[0]);
-
-          let detail: string;
-          if (["object.created", "object.updated", "object.deleted"].includes(entry.action)) {
-            const total = (createdCount ?? 0) + (updatedCount ?? 0) + (deletedCount ?? 0);
-            if (total > 1) {
-              const parts: string[] = [];
-              if (createdCount) {
-                if (allSameType(createdTypes, createdCount)) {
-                  parts.push(`${createdCount} ${actionTypeLabel(createdTypes![0])}${createdCount > 1 ? "s" : ""}`);
-                } else {
-                  parts.push(`${createdCount} ${entry.action === "object.created" ? "drew" : "added"}`);
-                }
-              }
-              if (updatedCount) {
-                if (allSameType(updatedTypes, updatedCount)) {
-                  parts.push(`${updatedCount} ${actionTypeLabel(updatedTypes![0])}${updatedCount > 1 ? "s" : ""} updated`);
-                } else {
-                  parts.push(`${updatedCount} updated`);
-                }
-              }
-              if (deletedCount) {
-                if (allSameType(deletedTypes, deletedCount)) {
-                  parts.push(`${deletedCount} ${actionTypeLabel(deletedTypes![0])}${deletedCount > 1 ? "s" : ""} removed`);
-                } else {
-                  parts.push(`${deletedCount} removed`);
-                }
-              }
-              detail = parts.join(", ");
-            } else if (metaType) {
-              detail = `${action} a ${shapeType}`;
-            } else {
-              detail = `${action} a shape`;
-            }
-          } else if (["board.created", "board.joined", "board.shared", "board.deleted", "board:undo", "board:redo", "snapshot:restore"].includes(entry.action)) {
-            detail = action;
-          } else if (entry.action === "comment.created") {
-            detail = metaType ? `commented on a ${shapeType}` : "commented on a shape";
-          } else if (entry.action === "comment.deleted") {
-            detail = metaType ? `deleted a comment on a ${shapeType}` : "deleted a comment on a shape";
-          } else {
-            detail = action;
-          }
+          const detail = describeActivityFromAction(entry.action, meta);
 
           return (
             <div

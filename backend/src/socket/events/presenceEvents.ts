@@ -1,7 +1,7 @@
 import { Server, Socket } from "socket.io"
 import { canAccessBoard, getSocketUserId } from "@/socket/boardAccess.js"
 
-const boardOnlineUsers = new Map<string, Map<string, number>>()
+export const boardOnlineUsers = new Map<string, Map<string, number>>()
 
 const getOnlineUserIds = (boardId: string) => {
   const boardUsers = boardOnlineUsers.get(boardId)
@@ -12,14 +12,14 @@ const getOnlineUserIds = (boardId: string) => {
     .map(([userId]) => userId)
 }
 
-const trackOnline = (boardId: string, userId: string) => {
+export const trackOnline = (boardId: string, userId: string) => {
   const boardUsers = boardOnlineUsers.get(boardId) ?? new Map<string, number>()
   const current = boardUsers.get(userId) ?? 0
   boardUsers.set(userId, current + 1)
   boardOnlineUsers.set(boardId, boardUsers)
 }
 
-const untrackOnline = (boardId: string, userId: string) => {
+export const untrackOnline = (boardId: string, userId: string) => {
   const boardUsers = boardOnlineUsers.get(boardId)
   if (!boardUsers) return
 

@@ -375,7 +375,7 @@ export async function replaceBoardShapes(
         boardId,
         resolvedUserId!,
         rowType,
-        JSON.stringify(Object.fromEntries(Object.entries(shape).filter(([k]) => k !== "id"))),
+        JSON.stringify(shape),
       );
     }
   }, { timeout: 30_000 });

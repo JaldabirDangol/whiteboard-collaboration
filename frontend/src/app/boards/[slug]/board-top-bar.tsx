@@ -6,6 +6,7 @@ import { AVATAR_COLORS, getInitials } from "./board-profile-utils";
 import { useQuery } from "@tanstack/react-query";
 import { getBoardActivity, type BoardActivity } from "@/lib/api";
 import SnapshotDialog from "./board-snapshot-dialog";
+import { describeActivityFromAction } from "@/lib/activity-description";
 
 type TopTab = "Files" | "Canvas" | "Export" | "History";
 
@@ -119,15 +120,8 @@ export default function BoardTopBar({
 
   const historyEntries = activityData ?? [];
 
-  const formatAction = (action: string) => {
-    const map: Record<string, string> = {
-      "board:undo": "Undo",
-      "board:redo": "Redo",
-      "object.created": "Created shape",
-      "object.updated": "Updated shape",
-      "object.deleted": "Deleted shape",
-    };
-    return map[action] || action;
+  const formatAction = (entry: BoardActivity) => {
+    return describeActivityFromAction(entry.action, entry.metadata ?? {});
   };
 
   return (
@@ -313,7 +307,7 @@ export default function BoardTopBar({
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Recent activity</p>
                   {historyEntries.slice(0, 20).map((entry: BoardActivity) => (
                     <div key={entry.id} className="flex items-center justify-between py-1.5 text-xs">
-                      <span className="text-slate-700">{formatAction(entry.action)}</span>
+                      <span className="text-slate-700">{formatAction(entry)}</span>
                       <span className="text-slate-400">{new Date(entry.createdAt).toLocaleTimeString()}</span>
                     </div>
                   ))}

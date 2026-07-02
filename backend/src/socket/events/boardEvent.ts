@@ -15,6 +15,7 @@ import {
 import { canAccessBoard, canEditBoard } from "@/socket/boardAccess.js";
 import { getIO } from "@/socket/index.js";
 import { logAction } from "@/lib/auditLog.js";
+import { untrackOnline } from "@/socket/events/presenceEvents.js";
 
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const persistCounters = new Map<string, number>();
@@ -469,13 +470,14 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
     const doc = getYDoc(boardId);
     await persistBoardStateNow(boardId, doc, socket.data.user?.id, true);
 
+    const userId = socket.data.user?.id ?? socket.id;
     socket.leave(boardId);
     trackRoomLeave(boardId, socket.id);
     joinedBoards.delete(boardId);
+    untrackOnline(boardId, userId);
 
-    socket.to(boardId).emit("board:userLeft", {
-      userId: socket.data.user?.id ?? socket.id,
-    });
+    socket.to(boardId).emit("board:userLeft", { userId });
+    socket.to(boardId).emit("presence:userOffline", { userId, status: "offline" });
   });
 
   socket.on("disconnect", async () => {

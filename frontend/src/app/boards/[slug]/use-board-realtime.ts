@@ -155,20 +155,20 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     // If we already received data via socket, don't overwrite with REST
     if (hasRemoteDataRef.current) return;
 
-    if (doc && yBoard) {
-      const shapeKeys = Array.from(yBoard.keys()).filter(isShapeKey);
-      if (shapeKeys.length === 0 && !yBoard.get(SHAPES_KEY)) {
-        const next = normalizeShapesForClient(persistedShapes as unknown[]);
-        doc.transact(() => {
-          for (const shape of next) {
-            yBoard.set(shapeKeyForId(shape.id), JSON.stringify(shape));
-          }
-        }, REMOTE_ORIGIN);
-      }
+    if (!doc || !yBoard) return;
+
+    const shapeKeys = Array.from(yBoard.keys()).filter(isShapeKey);
+    if (shapeKeys.length === 0 && !yBoard.get(SHAPES_KEY)) {
+      const next = normalizeShapesForClient(persistedShapes as unknown[]);
+      doc.transact(() => {
+        for (const shape of next) {
+          yBoard.set(shapeKeyForId(shape.id), JSON.stringify(shape));
+        }
+      }, REMOTE_ORIGIN);
     }
 
     setShapesWithCache((prev) => {
-      const next = readShapesFromYBoard(yBoard!);
+      const next = readShapesFromYBoard(yBoard);
       if (prev.length > 0 && prev.length === next.length) return prev;
       return next.length > 0 ? next : normalizeShapesForClient(persistedShapes as unknown[]);
     });

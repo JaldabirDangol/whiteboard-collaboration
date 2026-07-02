@@ -18,11 +18,17 @@ export default function BoardsPage() {
 
   const [filter, setFilter] = useState<BoardFilter>("all");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(0);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 700);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     startTransition(() => setPage(0));
-  }, [filter, search]);
+  }, [filter, debouncedSearch]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -31,11 +37,11 @@ export default function BoardsPage() {
   }, [loading, user, router]);
 
   const { data: result, isLoading, refetch } = useQuery({
-    queryKey: ["boards", filter, search, page],
+    queryKey: ["boards", filter, debouncedSearch, page],
     enabled: Boolean(user),
     queryFn: async () => {
       try {
-        return await getBoards({ filter, search: search || undefined, skip: page * PAGE_SIZE, take: PAGE_SIZE });
+        return await getBoards({ filter, search: debouncedSearch || undefined, skip: page * PAGE_SIZE, take: PAGE_SIZE });
       } catch {
         router.replace("/login");
         return { boards: [], total: 0 };

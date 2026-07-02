@@ -1,11 +1,9 @@
 "use client";
 
 import type { Stage as KonvaStage } from "konva/lib/Stage";
-import type { Node as KonvaNode, KonvaEventObject } from "konva/lib/Node";
+import type { Node as KonvaNode } from "konva/lib/Node";
 import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
 import { useCallback, useEffect, useMemo, useRef, useState, startTransition, type ChangeEvent } from "react";
-import { Arrow, Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
-import { Minus, Plus } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import Header from "@/components/canvas/header";
@@ -15,15 +13,21 @@ import { apiUrl } from "@/constant";
 import { getBoardDetails, getPersistedBoardShapes, joinBoard, shareBoard, uploadBoardImage, getUserByEmail, getCommentCountsByBoard } from "@/lib/api";
 import { toast } from "sonner";
 import type { BoardShape, CircleShape, EllipseShape, ImageShape, LaserStroke, RectShape, TextShape } from "./board-types";
-import { newShapeId, normalizeShapesForClient, serializeShapesToSvg } from "./board-shape-utils";
+import { newShapeId, normalizeShapesForClient } from "./board-shape-utils";
 import { AVATAR_COLORS, getInitials, getStoredProfile } from "./board-profile-utils";
 import BoardTopBar from "./board-top-bar";
 import BoardRightPanel from "./board-right-panel";
 import BoardMobileChat from "./board-mobile-chat";
+import BoardCanvasStage from "./board-canvas-stage";
+import BoardConnectionStatus from "./board-connection-status";
+import BoardZoomControls from "./board-zoom-controls";
 import { useBoardRealtime } from "./use-board-realtime";
 import { useBoardCanvasInteractions, getAABB } from "./use-board-canvas-interactions";
 import { useConnectionStatus } from "@/lib/use-connection-status";
 import { Quadtree } from "@/lib/quadtree";
+import { handleExportJson as exportJson, handleExportImage as exportImage, handleExportSvgFn as exportSvg } from "./board-export-utils";
+import { useTextEditing } from "./use-text-editing";
+import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 
 export default function Page() {
   const params = useParams();
@@ -41,7 +45,6 @@ export default function Page() {
   const stageRef = useRef<KonvaStage | null>(null);
   const shapeRefs = useRef<Map<string, KonvaNode>>(new Map());
   const transformerRef = useRef<KonvaTransformer>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [stageSize, setStageSize] = useState({ width: 1, height: 1 });
   const [mounted, setMounted] = useState(false);
@@ -59,9 +62,9 @@ export default function Page() {
   const [shareEmail, setShareEmail] = useState("");
   const [shareRole, setShareRole] = useState<"EDITOR" | "VIEWER">("VIEWER");
   const connectionStatus = useConnectionStatus();
-  const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
   const [activeTopTab, setActiveTopTab] = useState<"Files" | "Canvas" | "Export" | "History">("Canvas");
-  const [rightPanelTab, setRightPanelTab] = useState<"chat" | "comments" | null>(null);
+  const [rightPanelTab, setRightPanelTab] = useState<"chat" | "comments" | null>("chat");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [followUserId, setFollowUserId] = useState<string | null>(null);
@@ -80,9 +83,18 @@ export default function Page() {
     document.addEventListener("fullscreenchange", onFsChange);
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
+  const savedRightPanelTabRef = useRef<"chat" | "comments">("chat");
+
+  useEffect(() => {
+    if (isFullscreen) {
+      savedRightPanelTabRef.current = rightPanelTab ?? "chat";
+      setRightPanelTab(null);
+    } else {
+      setRightPanelTab(savedRightPanelTabRef.current);
+    }
+  }, [isFullscreen]);
   const [draftAvatarColor, setDraftAvatarColor] = useState(AVATAR_COLORS[0]);
   const [laserStrokes, setLaserStrokes] = useState<LaserStroke[]>([]);
-const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [userSuggestions, setUserSuggestions] = useState<{ id: string; email: string; name?: string | null }[]>([]);
 
   const { data: boardDetails } = useQuery({
@@ -139,8 +151,32 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canEditBoardRef = useRef(canEditBoard);
   canEditBoardRef.current = canEditBoard;
-  const editingTextIdRef = useRef(editingTextId);
-  editingTextIdRef.current = editingTextId;
+  const zoomRef = useRef(1);
+  const viewportRef = useRef({ x: 0, y: 0 });
+
+  const {
+    editingTextId,
+    setEditingTextId,
+    textareaRef,
+    editingTextIdRef,
+    spawnTextarea,
+  } = useTextEditing(boardWrapRef, shapes, updateShapesLocally, shapesRef, zoomRef, viewportRef);
+
+  const setEditingTextIdRef = useRef<(id: string | null) => void>(setEditingTextId);
+  setEditingTextIdRef.current = setEditingTextId;
+  const spawnTextareaRef = useRef(spawnTextarea);
+  spawnTextareaRef.current = spawnTextarea;
+
+  useKeyboardShortcuts({
+    canEditBoardRef,
+    editingTextIdRef,
+    selectedShapeIdsRef,
+    setSelectedShapeIds,
+    shapesRef,
+    updateShapesLocally,
+    clipboardRef,
+    requestHistoryEventRef,
+  });
 
   // Track shape version for auto-save indicator
   useEffect(() => {
@@ -207,9 +243,9 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     },
     getShapeIdsInRect,
   });
-
-  const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
+  viewportRef.current = viewport;
+
   const stageSizeRef = useRef(stageSize);
   stageSizeRef.current = stageSize;
 
@@ -339,53 +375,11 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
   };
   requestHistoryEventRef.current = requestHistoryEvent;
 
-  const downloadBlob = (blob: Blob, filename: string) => {
-    if (typeof window === "undefined") return;
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
+  const handleExportJson = () => exportJson(shapes, id, boardDetails?.title);
 
-  const handleExportJson = () => {
-    const payload = {
-      boardId: id,
-      exportedAt: new Date().toISOString(),
-      shapes,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    downloadBlob(blob, `${boardDetails?.title || "board"}-shapes.json`);
-    toast.success("Board exported as JSON");
-  };
+  const handleExportImage = () => exportImage(stageRef, boardDetails?.title);
 
-  const handleExportImage = () => {
-    const stage = stageRef.current;
-    if (!stage) {
-      toast.error("Canvas is not ready yet");
-      return;
-    }
-
-    const dataUrl = stage.toDataURL({ pixelRatio: 2 });
-    if (!dataUrl) {
-      toast.error("Unable to export canvas");
-      return;
-    }
-
-    const anchor = document.createElement("a");
-    anchor.href = dataUrl;
-    anchor.download = `${boardDetails?.title || "board"}.png`;
-    anchor.click();
-    toast.success("Board exported as PNG");
-  };
-
-  const handleExportSvg = () => {
-    const svgContent = serializeShapesToSvg(shapes, boardDetails?.title || "Whiteboard");
-    const blob = new Blob([svgContent], { type: "image/svg+xml;charset=utf-8" });
-    downloadBlob(blob, `${boardDetails?.title || "board"}.svg`);
-    toast.success("Board exported as SVG");
-  };
+  const handleExportSvg = () => exportSvg(shapes, boardDetails?.title);
 
   const handleFileImport = async (event: ChangeEvent<HTMLInputElement>) => {
     if (!canEditBoard) {
@@ -592,131 +586,6 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
   };
 
   const isShapeSelected = (shapeId: string) => selectedShapeIds.has(shapeId);
-
-  // Text editing helpers
-  const spawnTextarea = (
-    shapeId: string,
-    text = "",
-    position?: { x: number; y: number; fontSize: number; fontFamily: string; color: string },
-  ) => {
-    const shape = position
-      ? { id: shapeId, type: "text" as const, x: position.x, y: position.y, fontSize: position.fontSize, fontFamily: position.fontFamily, color: position.color }
-      : (shapesRef.current.find((s) => s.id === shapeId) as { id: string; type: "text"; x: number; y: number; fontSize: number; fontFamily: string; color: string } | undefined);
-    if (!shape) return;
-
-    const existing = textareaRef.current;
-    if (existing && existing.parentNode) {
-      existing.parentNode.removeChild(existing);
-      textareaRef.current = null;
-    }
-
-    const container = boardWrapRef.current;
-    if (!container) return;
-
-    const el = document.createElement("textarea");
-    el.value = text;
-    el.dataset.editingTextId = shapeId;
-    el.style.position = "absolute";
-    el.style.left = `${shape.x * zoom + viewport.x}px`;
-    el.style.top = `${shape.y * zoom + viewport.y}px`;
-    el.style.fontSize = `${shape.fontSize * zoom}px`;
-    el.style.fontFamily = shape.fontFamily || "Arial";
-    el.style.color = shape.color;
-    el.style.background = "rgba(255,255,255,0.9)";
-    el.style.border = "2px dashed #6366f1";
-    el.style.outline = "none";
-    el.style.resize = "none";
-    el.style.overflow = "hidden";
-    el.style.minWidth = "120px";
-    el.style.minHeight = `${shape.fontSize * zoom + 12}px`;
-    el.style.whiteSpace = "pre-wrap";
-    el.style.zIndex = "30";
-    el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
-    el.style.lineHeight = "1.3";
-    el.style.padding = "4px";
-    el.style.margin = "0";
-    el.style.borderRadius = "4px";
-
-    container.appendChild(el);
-    textareaRef.current = el;
-
-    // Use rAF to wait for React re-render before focusing
-    requestAnimationFrame(() => {
-      el.focus();
-      el.select();
-    });
-
-    el.addEventListener("pointerdown", (e) => e.stopPropagation());
-
-    let cancelled = false;
-
-    el.addEventListener("blur", () => {
-      if (cancelled) return;
-      finishTextEditing(el.value);
-      // cleanupTextarea intentionally NOT called here —
-      // finishTextEditing calls setEditingTextId(null), which
-      // triggers the cleanup effect (line 901) to remove the DOM node.
-      // Calling it here would cause a NotFoundError when spawnTextarea
-      // removes an existing textarea and synchronously fires blur.
-    });
-
-    el.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        cancelled = true;
-        cancelTextEditing(el.value);
-        cleanupTextarea(el);
-      }
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        finishTextEditing(el.value);
-        cleanupTextarea(el);
-      }
-    });
-  };
-
-  const cleanupTextarea = (el: HTMLTextAreaElement) => {
-    try {
-      if (el.parentNode) el.parentNode.removeChild(el);
-    } catch {
-      // Ignore — may be called re-entrantly during blur propagation
-    }
-    if (textareaRef.current === el) textareaRef.current = null;
-  };
-
-  const finishTextEditing = (text: string) => {
-    const id = editingTextIdRef.current;
-    if (!id) return;
-
-    if (!text.trim()) {
-      updateShapesLocally((prev) =>
-        prev.filter((shape) => shape.id !== id)
-      );
-    } else {
-      updateShapesLocally((prev) =>
-        prev.map((shape) =>
-          shape.id === id && shape.type === "text"
-            ? { ...shape, text }
-            : shape
-        )
-      );
-    }
-
-    setEditingTextId(null);
-  };
-
-  const cancelTextEditing = (text: string) => {
-    const id = editingTextIdRef.current;
-    if (!id) return;
-
-    if (!text.trim()) {
-      updateShapesLocally((prev) =>
-        prev.filter((shape) => shape.id !== id)
-      );
-    }
-
-    setEditingTextId(null);
-  };
 
   // Handle transform end for Transformer
   const handleTransformEnd = () => {
@@ -954,29 +823,6 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [updateShapesLocally]);
 
-  // Sync textarea position on zoom/scroll
-  useEffect(() => {
-    if (!editingTextId || !textareaRef.current) return;
-    const shape = shapes.find((s) => s.id === editingTextId);
-    if (!shape || shape.type !== "text") return;
-
-    const el = textareaRef.current;
-    el.style.left = `${shape.x * zoom + viewport.x}px`;
-    el.style.top = `${shape.y * zoom + viewport.y}px`;
-    el.style.fontSize = `${shape.fontSize * zoom}px`;
-    el.style.minHeight = `${shape.fontSize * zoom + 12}px`;
-  }, [editingTextId, zoom, viewport, shapes]);
-
-  // Cleanup textarea when editing ends
-  useEffect(() => {
-    if (editingTextId) return;
-    const el = textareaRef.current;
-    if (el && el.parentNode) {
-      el.parentNode.removeChild(el);
-      textareaRef.current = null;
-    }
-  }, [editingTextId]);
-
   // User search for share dialog
   useEffect(() => {
     if (shareEmail.trim().length < 2) {
@@ -1091,512 +937,49 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
               }}
             />
           )}
-          <Stage
-            ref={stageRef}
-            style={{ touchAction: "none" }}
-            width={stageSize.width}
-            height={stageSize.height}
-            onMouseDown={handlePointerDown}
-            onMouseMove={handlePointerMove}
-            onMouseUp={handlePointerUp}
-            onMouseLeave={handlePointerUp}
-            onTouchStart={handlePointerDown}
-            onTouchMove={handlePointerMove}
-            onTouchEnd={handlePointerUp}
-            onTouchCancel={handlePointerUp}
-            onWheel={handleWheel}
-          >
-            <Layer>
-              <Rect
-                x={0}
-                y={0}
-                width={stageSize.width}
-                height={stageSize.height}
-                fill="white"
-                listening={false}
-              />
-              <Group x={viewport.x} y={viewport.y} scaleX={zoom} scaleY={zoom}>
-                  {renderedShapes.map((shape) => {
-                  const shapeCommentCount = commentCounts?.[shape.id] ?? 0;
-                  if (shape.type === "line") {
-                    const isArrow = shape.tool === "arrow";
-                    const arrowLen = Math.hypot(shape.points[2] - shape.points[0], shape.points[3] - shape.points[1]);
-                    return isArrow ? (
-                      <Arrow
-                        key={shape.id}
-                        id={shape.id}
-                        points={shape.points}
-                        stroke={shape.color}
-                        strokeWidth={shape.strokeWidth}
-                        pointerLength={Math.max(8, Math.min(arrowLen * 0.15, 30))}
-                        pointerWidth={Math.max(6, Math.min(arrowLen * 0.1, 24))}
-                        fill={shape.color}
-                        lineCap="round"
-                        lineJoin="round"
-                        draggable={canEditBoard}
-                        onClick={(e) => {
-                          e.cancelBubble = true;
-                          handleShapeSelect(shape.id, e.evt.shiftKey);
-                        }}
-                        onTap={() => {
-                          handleShapeSelect(shape.id, false);
-                        }}
-                        onDragEnd={(event) => {
-                          if (!canEditBoard) return;
-                          const pos = event.target.position();
-                          updateShapesLocally((prev) =>
-                            prev.map((s) => {
-                              if (s.id !== shape.id || s.type !== "line") return s;
-                              return {
-                                ...s,
-                                points: s.points.map((p, i) => p + (i % 2 === 0 ? pos.x : pos.y)),
-                              };
-                            })
-                          );
-                          event.target.position({ x: 0, y: 0 });
-                        }}
-                        shadowEnabled={isShapeSelected(shape.id)}
-                        shadowColor="#6366f1"
-                        shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
-                      />
-                    ) : (
-                      <Line
-                        key={shape.id}
-                        id={shape.id}
-                        points={shape.points}
-                        stroke={shape.color}
-                        strokeWidth={shape.strokeWidth}
-                        tension={0.5}
-                        lineCap="round"
-                        lineJoin="round"
-                        draggable={canEditBoard}
-                        onClick={(e) => {
-                          e.cancelBubble = true;
-                          handleShapeSelect(shape.id, e.evt.shiftKey);
-                        }}
-                        onTap={() => {
-                          handleShapeSelect(shape.id, false);
-                        }}
-                        onDragEnd={(event) => {
-                          if (!canEditBoard) return;
-                          const pos = event.target.position();
-                          updateShapesLocally((prev) =>
-                            prev.map((s) => {
-                              if (s.id !== shape.id || s.type !== "line") return s;
-                              const dx = pos.x;
-                              const dy = pos.y;
-                              return {
-                                ...s,
-                                points: s.points.map((p, i) => p + (i % 2 === 0 ? dx : dy)),
-                              };
-                            })
-                          );
-                          event.target.position({ x: 0, y: 0 });
-                        }}
-                        shadowEnabled={isShapeSelected(shape.id)}
-                        shadowColor="#6366f1"
-                        shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
-                        globalCompositeOperation={
-                          shape.tool === "eraser" ? "destination-out" : "source-over"
-                        }
-                      />
-                    );
-                  }
-
-                  if (shape.type === "rectangle") {
-                    const rect: RectShape = normalizeRect(shape);
-                    return (
-                      <Rect
-                        key={shape.id}
-                        id={shape.id}
-                        x={rect.x}
-                        y={rect.y}
-                        width={rect.width}
-                        height={rect.height}
-                        stroke={rect.color}
-                        strokeWidth={rect.strokeWidth}
-                        fill={rect.fill || "transparent"}
-                        draggable={canEditBoard}
-                        onClick={(e) => {
-                          e.cancelBubble = true;
-                          handleShapeSelect(shape.id, e.evt.shiftKey);
-                        }}
-                        onTap={() => {
-                          handleShapeSelect(shape.id, false);
-                        }}
-                        onDragEnd={(event) => {
-                          if (!canEditBoard) return;
-                          const pos = event.target.position();
-                          updateShapePosition(shape.id, pos.x, pos.y);
-                        }}
-                        shadowEnabled={isShapeSelected(shape.id)}
-                        shadowColor="#6366f1"
-                        shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
-                        ref={(node) => {
-                          if (node) shapeRefs.current.set(shape.id, node);
-                          else shapeRefs.current.delete(shape.id);
-                        }}
-                      />
-                    );
-                  }
-
-                    if (shape.type === "image") {
-                      return (
-                        <BoardImageShape
-                          key={shape.id}
-                          shape={shape}
-                          draggable={canEditBoard}
-                          selected={isShapeSelected(shape.id)}
-                          onSelect={(shiftKey) => handleShapeSelect(shape.id, shiftKey)}
-                          onDragEnd={(x, y) => updateShapePosition(shape.id, x, y)}
-                          getShapeNode={(node) => {
-                            if (node) shapeRefs.current.set(shape.id, node);
-                            else shapeRefs.current.delete(shape.id);
-                          }}
-                        />
-                      );
-                    }
-
-                if (shape.type === "circle") {
-                  return (
-                    <Circle
-                      key={shape.id}
-                      id={shape.id}
-                      x={shape.x}
-                      y={shape.y}
-                      radius={shape.radius}
-                      stroke={shape.color}
-                      strokeWidth={shape.strokeWidth}
-                      fill={shape.fill || "transparent"}
-                      draggable={canEditBoard}
-                      onClick={(e) => {
-                        e.cancelBubble = true;
-                        handleShapeSelect(shape.id, e.evt.shiftKey);
-                      }}
-                      onTap={() => {
-                        handleShapeSelect(shape.id, false);
-                      }}
-                      onDragEnd={(event) => {
-                        if (!canEditBoard) return;
-                        const pos = event.target.position();
-                        updateShapePosition(shape.id, pos.x, pos.y);
-                      }}
-                      shadowEnabled={isShapeSelected(shape.id)}
-                      shadowColor="#6366f1"
-                      shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
-                      ref={(node) => {
-                        if (node) shapeRefs.current.set(shape.id, node);
-                        else shapeRefs.current.delete(shape.id);
-                      }}
-                    />
-                  );
-                }
-
-                if (shape.type === "ellipse") {
-                  return (
-                    <Ellipse
-                      key={shape.id}
-                      id={shape.id}
-                      x={shape.x}
-                      y={shape.y}
-                      radiusX={shape.radiusX}
-                      radiusY={shape.radiusY}
-                      stroke={shape.color}
-                      strokeWidth={shape.strokeWidth}
-                      fill={shape.fill || "transparent"}
-                      draggable={canEditBoard}
-                      onClick={(e) => {
-                        e.cancelBubble = true;
-                        handleShapeSelect(shape.id, e.evt.shiftKey);
-                      }}
-                      onTap={() => {
-                        handleShapeSelect(shape.id, false);
-                      }}
-                      onDragEnd={(event) => {
-                        if (!canEditBoard) return;
-                        const pos = event.target.position();
-                        updateShapePosition(shape.id, pos.x, pos.y);
-                      }}
-                      shadowEnabled={isShapeSelected(shape.id)}
-                      shadowColor="#6366f1"
-                      shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
-                      ref={(node) => {
-                        if (node) shapeRefs.current.set(shape.id, node);
-                        else shapeRefs.current.delete(shape.id);
-                      }}
-                    />
-                  );
-                }
-
-                if (shape.type === "text") {
-                  return (
-                    <Text
-                      key={shape.id}
-                      id={shape.id}
-                      x={shape.x}
-                      y={shape.y}
-                      text={shape.text}
-                      fontSize={shape.fontSize}
-                      fontFamily={shape.fontFamily || "Arial"}
-                      fill={shape.color}
-                      draggable={canEditBoard && editingTextId !== shape.id}
-                      onClick={(e) => {
-                        e.cancelBubble = true;
-                        handleShapeSelect(shape.id, e.evt.shiftKey);
-                      }}
-                      onTap={() => {
-                        handleShapeSelect(shape.id, false);
-                      }}
-                      onDblClick={() => {
-                        setEditingTextId(shape.id);
-                        spawnTextarea(shape.id, shape.text);
-                      }}
-                      onDragEnd={(event) => {
-                        if (!canEditBoard) return;
-                        const pos = event.target.position();
-                        updateShapePosition(shape.id, pos.x, pos.y);
-                      }}
-                      shadowEnabled={isShapeSelected(shape.id)}
-                      shadowColor="#6366f1"
-                      shadowBlur={isShapeSelected(shape.id) ? 8 : 0}
-                      ref={(node) => {
-                        if (node) shapeRefs.current.set(shape.id, node);
-                        else shapeRefs.current.delete(shape.id);
-                      }}
-                    />
-                  );
-                }
-
-                return null;
-              })}
-              {canEditBoard && selectedShapeIds.size > 0 && (
-                <Transformer
-                  ref={transformerRef}
-                  rotateEnabled={false}
-                  keepRatio={false}
-                  enabledAnchors={[
-                    "top-left",
-                    "top-center",
-                    "top-right",
-                    "middle-left",
-                    "middle-right",
-                    "bottom-left",
-                    "bottom-center",
-                    "bottom-right",
-                  ]}
-                  boundBoxFunc={(oldBox, newBox) => {
-                    if (newBox.width < 10 || newBox.height < 10) return oldBox;
-                    return newBox;
-                  }}
-                  onTransformEnd={handleTransformEnd}
-                />
-              )}
-              {marqueeRect && (
-                <Rect
-                  x={marqueeRect.x}
-                  y={marqueeRect.y}
-                  width={marqueeRect.width}
-                  height={marqueeRect.height}
-                  stroke="#6366f1"
-                  strokeWidth={1 / zoom}
-                  dash={[6 / zoom, 4 / zoom]}
-                  fill="rgba(99, 102, 241, 0.08)"
-                  listening={false}
-                />
-              )}
-              {commentCounts ? renderedShapes.map((shape) => {
-                const count = commentCounts[shape.id];
-                if (!count) return null;
-                let bx = 0, by = 0;
-                switch (shape.type) {
-                  case "rectangle": bx = shape.x + shape.width; by = shape.y; break;
-                  case "circle": bx = shape.x + shape.radius; by = shape.y - shape.radius; break;
-                  case "ellipse": bx = shape.x + shape.radiusX; by = shape.y - shape.radiusY; break;
-                  case "line": {
-                    const pts = shape.points;
-                    let mx = -Infinity, my = -Infinity;
-                    for (let i = 0; i < pts.length; i += 2) {
-                      if (pts[i] > mx) mx = pts[i];
-                      if (pts[i + 1] > my) my = pts[i + 1];
-                    }
-                    bx = mx; by = my;
-                    break;
-                  }
-                  case "text": bx = shape.x + 40; by = shape.y - 6; break;
-                  case "image": bx = shape.x + shape.width; by = shape.y; break;
-                  default: { const s = shape as { x?: number; y?: number }; bx = s.x ?? 0; by = s.y ?? 0; }
-                }
-                return (
-                  <Group
-                    key={`badge-${shape.id}`}
-                    x={bx}
-                    y={by}
-                    onClick={() => {
-                      setSelectedShapeIds(new Set([shape.id]));
-                      setRightPanelTab("comments");
-                    }}
-                    onTap={() => {
-                      setSelectedShapeIds(new Set([shape.id]));
-                      setRightPanelTab("comments");
-                    }}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <Circle radius={9} fill="#6366f1" stroke="#fff" strokeWidth={2} />
-                    <Text
-                      x={-9} y={-7}
-                      width={18} height={14}
-                      text={String(count)}
-                      fontSize={10}
-                      fontStyle="bold"
-                      fill="#fff"
-                      align="center"
-                      verticalAlign="middle"
-                    />
-                  </Group>
-                );
-              }) : null}
-              </Group>
-            </Layer>
-
-            {/* Remote draft shapes layer (in-progress drawings from others) */}
-            <Layer listening={false}>
-              <Group x={viewport.x} y={viewport.y} scaleX={zoom} scaleY={zoom}>
-                {Array.from(remoteDraftShapes.values()).map((draft) => (
-                  <DraftShapeRenderer key={draft.id} shape={draft} />
-                ))}
-              </Group>
-            </Layer>
-
-            <Layer listening={false}>
-              <Group x={viewport.x} y={viewport.y} scaleX={zoom} scaleY={zoom}>
-                {[...laserStrokes, ...remoteLaserStrokes].map((stroke) => (
-                  <Line
-                    key={stroke.id}
-                    points={stroke.points}
-                    stroke={stroke.color}
-                    strokeWidth={stroke.strokeWidth}
-                    tension={0.5}
-                    lineCap="round"
-                    lineJoin="round"
-                    opacity={0.85}
-                  />
-                ))}
-              </Group>
-            </Layer>
-
-            <Layer listening={false}>
-              <Group x={viewport.x} y={viewport.y} scaleX={zoom} scaleY={zoom}>
-                {Object.values(remoteCursors).map((cursor) => (
-                  <Group key={cursor.userId}>
-                    <Circle x={cursor.x} y={cursor.y} radius={5} fill="#4f46e5" />
-                    <Text
-                      x={cursor.x + 10}
-                      y={cursor.y - 12}
-                      text={cursorLabelByUserId[cursor.userId] ?? "Unknown user"}
-                      fontSize={11}
-                      fill="#312e81"
-                    />
-                  </Group>
-                ))}
-              </Group>
-            </Layer>
-          </Stage>
-
-          {connectionStatus !== "connected" && (
-            <div className="pointer-events-auto absolute bottom-4 left-4 z-20 flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-3 py-1.5 shadow-sm backdrop-blur">
-              <span className={`inline-block h-2 w-2 rounded-full ${
-                connectionStatus === "connecting" ? "bg-amber-400 animate-pulse" :
-                connectionStatus === "error" ? "bg-red-500" :
-                "bg-slate-400"
-              }`} />
-              <span className="text-xs font-medium text-slate-600">
-                {connectionStatus === "connecting" ? "Connecting..." :
-                 connectionStatus === "error" ? "Connection failed" :
-                 "Disconnected"}
-              </span>
-              {connectionStatus === "error" && (
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="ml-1 text-xs text-indigo-600 hover:text-indigo-500 underline"
-                >
-                  Retry
-                </button>
-              )}
-            </div>
-          )}
-          <div className="pointer-events-auto absolute bottom-4 right-4 z-20 flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur">
-            <button
-              type="button"
-              onClick={() => {
-                if (shapes.length === 0) { setZoom(1); setViewport({ x: 0, y: 0 }); return; }
-                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                for (const s of shapes) {
-                  if (s.type === "line") {
-                    for (let i = 0; i < s.points.length; i += 2) {
-                      if (s.points[i] < minX) minX = s.points[i];
-                      if (s.points[i + 1] < minY) minY = s.points[i + 1];
-                      if (s.points[i] > maxX) maxX = s.points[i];
-                      if (s.points[i + 1] > maxY) maxY = s.points[i + 1];
-                    }
-                  } else if (s.type === "circle") {
-                    if (s.x - s.radius < minX) minX = s.x - s.radius;
-                    if (s.y - s.radius < minY) minY = s.y - s.radius;
-                    if (s.x + s.radius > maxX) maxX = s.x + s.radius;
-                    if (s.y + s.radius > maxY) maxY = s.y + s.radius;
-                  } else if (s.type === "ellipse") {
-                    if (s.x - s.radiusX < minX) minX = s.x - s.radiusX;
-                    if (s.y - s.radiusY < minY) minY = s.y - s.radiusY;
-                    if (s.x + s.radiusX > maxX) maxX = s.x + s.radiusX;
-                    if (s.y + s.radiusY > maxY) maxY = s.y + s.radiusY;
-                  } else if (s.type === "text") {
-                    if (s.x < minX) minX = s.x;
-                    if (s.y < minY) minY = s.y;
-                    const tw = s.text.length * s.fontSize * 0.6 + 10;
-                    if (s.x + tw > maxX) maxX = s.x + tw;
-                    if (s.y + s.fontSize + 10 > maxY) maxY = s.y + s.fontSize + 10;
-                  } else {
-                    const shape = s as { x: number; y: number; width: number; height: number };
-                    if (shape.x < minX) minX = shape.x;
-                    if (shape.y < minY) minY = shape.y;
-                    if (shape.x + shape.width > maxX) maxX = shape.x + shape.width;
-                    if (shape.y + shape.height > maxY) maxY = shape.y + shape.height;
-                  }
-                }
-                const cw = maxX - minX || 1;
-                const ch = maxY - minY || 1;
-                const pad = 40;
-                const fitZoom = Math.min((stageSize.width - pad * 2) / cw, (stageSize.height - pad * 2) / ch, 2);
-                setZoom(Math.max(0.1, fitZoom));
-                setViewport({ x: (stageSize.width - cw * fitZoom) / 2 - minX * fitZoom, y: (stageSize.height - ch * fitZoom) / 2 - minY * fitZoom });
-              }}
-              className="grid h-7 w-7 place-items-center rounded-md text-xs font-bold text-slate-600 transition hover:bg-slate-100"
-              title="Fit to screen"
-            >
-              Fit
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoom((prev) => clampZoom(prev - 0.1))}
-              className="grid h-7 w-7 place-items-center rounded-md text-slate-600 transition hover:bg-slate-100"
-            >
-              <Minus className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoom(1)}
-              className="min-w-14 rounded-md px-2 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-100"
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoom((prev) => clampZoom(prev + 0.1))}
-              className="grid h-7 w-7 place-items-center rounded-md text-slate-600 transition hover:bg-slate-100"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
+          <BoardCanvasStage
+            stageSize={stageSize}
+            stageRef={stageRef}
+            viewport={viewport}
+            zoom={zoom}
+            renderedShapes={renderedShapes}
+            canEditBoard={canEditBoard}
+            selectedShapeIds={selectedShapeIds}
+            selectedShapeIdsRef={selectedShapeIdsRef}
+            shapeRefs={shapeRefs}
+            transformerRef={transformerRef}
+            handlePointerDown={handlePointerDown}
+            handlePointerMove={handlePointerMove}
+            handlePointerUp={handlePointerUp}
+            handleWheel={handleWheel}
+            handleShapeSelect={handleShapeSelect}
+            isShapeSelected={isShapeSelected}
+            handleTransformEnd={handleTransformEnd}
+            normalizeRect={normalizeRect}
+            updateShapePosition={updateShapePosition}
+            updateShapesLocally={updateShapesLocally}
+            marqueeRect={marqueeRect}
+            commentCounts={commentCounts}
+            setSelectedShapeIds={setSelectedShapeIds}
+            setRightPanelTab={setRightPanelTab}
+            remoteDraftShapes={remoteDraftShapes}
+            laserStrokes={laserStrokes}
+            remoteLaserStrokes={remoteLaserStrokes}
+            remoteCursors={remoteCursors}
+            cursorLabelByUserId={cursorLabelByUserId}
+            editingTextId={editingTextId}
+            setEditingTextId={setEditingTextId}
+            spawnTextarea={spawnTextarea}
+          />
+          <BoardConnectionStatus connectionStatus={connectionStatus} />
+          <BoardZoomControls
+            zoom={zoom}
+            setZoom={setZoom}
+            clampZoom={clampZoom}
+            stageSize={stageSize}
+            shapes={shapes}
+            setViewport={setViewport}
+          />
         </main>
 
         <BoardRightPanel
@@ -1618,150 +1001,3 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     </div>
   );
 }
-
-const BoardImageShape = ({
-  shape,
-  draggable,
-  selected,
-  onSelect,
-  onDragEnd,
-  getShapeNode,
-}: {
-  shape: ImageShape;
-  draggable: boolean;
-  selected: boolean;
-  onSelect: (shiftKey: boolean) => void;
-  onDragEnd: (x: number, y: number) => void;
-  getShapeNode?: (node: KonvaNode | null) => void;
-}) => {
-  const image = useImageElement(shape.url);
-
-  return (
-    <KonvaImage
-      id={shape.id}
-      image={image ?? undefined}
-      x={shape.x}
-      y={shape.y}
-      width={shape.width}
-      height={shape.height}
-      draggable={draggable}
-      onClick={(e) => {
-        e.cancelBubble = true;
-        onSelect(e.evt.shiftKey);
-      }}
-      onTap={() => {
-        onSelect(false);
-      }}
-      onDragEnd={(event) => {
-        const pos = event.target.position();
-        onDragEnd(pos.x, pos.y);
-      }}
-      stroke={selected ? "#6366f1" : undefined}
-      strokeWidth={selected ? 2 : 0}
-      shadowEnabled={selected}
-      shadowColor="#6366f1"
-      shadowBlur={selected ? 8 : 0}
-      ref={getShapeNode}
-    />
-  );
-};
-
-const DraftShapeRenderer = ({ shape }: { shape: BoardShape }) => {
-  if (shape.type === "line") {
-    return (
-      <Line
-        points={shape.points}
-        stroke={shape.color}
-        strokeWidth={shape.strokeWidth}
-        tension={0.5}
-        lineCap="round"
-        lineJoin="round"
-        opacity={0.4}
-        dash={[6 / 1, 4 / 1]}
-        listening={false}
-      />
-    );
-  }
-
-  if (shape.type === "rectangle") {
-    const x = shape.width < 0 ? shape.x + shape.width : shape.x;
-    const y = shape.height < 0 ? shape.y + shape.height : shape.y;
-    return (
-      <Rect
-        x={x}
-        y={y}
-        width={Math.abs(shape.width)}
-        height={Math.abs(shape.height)}
-        stroke={shape.color}
-        strokeWidth={shape.strokeWidth}
-        fill={shape.fill || "transparent"}
-        opacity={0.4}
-        dash={[6 / 1, 4 / 1]}
-        listening={false}
-      />
-    );
-  }
-
-  if (shape.type === "circle") {
-    return (
-      <Circle
-        x={shape.x}
-        y={shape.y}
-        radius={shape.radius}
-        stroke={shape.color}
-        strokeWidth={shape.strokeWidth}
-        fill={shape.fill || "transparent"}
-        opacity={0.4}
-        dash={[6 / 1, 4 / 1]}
-        listening={false}
-      />
-    );
-  }
-
-  if (shape.type === "ellipse") {
-    return (
-      <Ellipse
-        x={shape.x}
-        y={shape.y}
-        radiusX={shape.radiusX}
-        radiusY={shape.radiusY}
-        stroke={shape.color}
-        strokeWidth={shape.strokeWidth}
-        fill={shape.fill || "transparent"}
-        opacity={0.4}
-        dash={[6 / 1, 4 / 1]}
-        listening={false}
-      />
-    );
-  }
-
-  return null;
-};
-
-const useImageElement = (url: string) => {
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
-
-  useEffect(() => {
-    if (!url) {
-      startTransition(() => setImage(null));
-      return;
-    }
-
-    let active = true;
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      if (active) setImage(img);
-    };
-    img.onerror = () => {
-      if (active) setImage(null);
-    };
-    img.src = url;
-
-    return () => {
-      active = false;
-    };
-  }, [url]);
-
-  return image;
-};

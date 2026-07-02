@@ -133,9 +133,27 @@ export const getCommentCountsByBoard = async (boardId: string) => {
     _count: { shapeId: true },
   });
 
-  return Object.fromEntries(
-    counts.map((c) => [c.shapeId, c._count.shapeId])
-  );
+  if (counts.length === 0) return {};
+
+  const shapeIds = counts.map(c => c.shapeId);
+  const shapes = await prisma.shape.findMany({
+    where: { id: { in: shapeIds } },
+    select: { id: true, data: true },
+  });
+
+  const dbIdToClientId = new Map<string, string>();
+  for (const s of shapes) {
+    const clientId = (s.data as Record<string, unknown> | null)?.id as string | undefined;
+    if (clientId) dbIdToClientId.set(s.id, clientId);
+  }
+
+  const result: Record<string, number> = {};
+  for (const c of counts) {
+    const clientId = dbIdToClientId.get(c.shapeId) ?? c.shapeId;
+    result[clientId] = c._count.shapeId;
+  }
+
+  return result;
 }
 
 export const deleteComment = async (id: string, userId: string) => {

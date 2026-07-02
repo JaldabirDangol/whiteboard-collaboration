@@ -23,6 +23,7 @@ const mockPrisma = {
   },
   shape: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
     count: vi.fn(),
   },
   boardMember: {
@@ -128,6 +129,10 @@ describe("Comment System", () => {
     mockPrisma.comment.groupBy.mockResolvedValue([
       { shapeId: "s1", _count: { shapeId: 2 } },
       { shapeId: "s2", _count: { shapeId: 1 } },
+    ]);
+    mockPrisma.shape.findMany.mockResolvedValue([
+      { id: "s1", data: { id: "s1" } },
+      { id: "s2", data: { id: "s2" } },
     ]);
 
     const req = makeReq({}, { boardId: "board-1" });

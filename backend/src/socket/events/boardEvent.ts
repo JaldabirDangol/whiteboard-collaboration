@@ -217,6 +217,9 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
           updated,
           deleted,
           type: singleType,
+          createdTypes,
+          updatedTypes,
+          deletedTypes,
         },
       }).catch(() => {});
     }

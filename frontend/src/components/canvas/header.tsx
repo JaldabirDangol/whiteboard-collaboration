@@ -1,7 +1,7 @@
 "use client";
 
 import { useToolStore, ToolType } from "@/store/useToolStore";
-import { ComponentType, SVGProps } from "react";
+import { ComponentType, SVGProps, useState } from "react";
 import { ArrowRight, Circle, Eraser, Minus, Pen, Plus, RectangleEllipsis, Square, Type, Undo, Redo, Zap } from "lucide-react";
 
 type Tool = {
@@ -49,6 +49,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
   const decreaseStroke = () => setStroke(strokeWidth - 1);
   const increaseStroke = () => setStroke(strokeWidth + 1);
   const toggleFill = () => setFill(fill ? undefined : color);
+  const [showFont, setShowFont] = useState(false);
 
   if (layout === "vertical") {
     return (
@@ -164,7 +165,14 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
           <div className="my-4 h-px w-10 bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
 
           <div className="flex flex-col items-center gap-3">
-            <span className="text-xs font-semibold text-slate-500">A</span>
+            <button
+              type="button"
+              onClick={() => setShowFont(!showFont)}
+              className={`text-xs font-semibold transition-colors ${showFont ? "text-indigo-600" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              A
+            </button>
+            {showFont && (<>
             <button
               type="button"
               aria-label="Decrease font size"
@@ -193,24 +201,24 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
             >
               <Plus className="h-4 w-4" />
             </button>
+            <select
+              aria-label="Font family"
+              disabled={disabled}
+              value={fontFamily}
+              onChange={(e) => setFontFamily(e.target.value)}
+              className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            >
+              <option value="Arial">Arial</option>
+              <option value="Helvetica">Helvetica</option>
+              <option value="Times New Roman">Times New Roman</option>
+              <option value="Courier New">Courier New</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Verdana">Verdana</option>
+              <option value="Trebuchet MS">Trebuchet MS</option>
+              <option value="Impact">Impact</option>
+            </select>
+            </>)}
           </div>
-          <select
-            aria-label="Font family"
-            disabled={disabled}
-            value={fontFamily}
-            onChange={(e) => setFontFamily(e.target.value)}
-            className="mt-3 h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-          >
-            <option value="Arial">Arial</option>
-            <option value="Helvetica">Helvetica</option>
-            <option value="Times New Roman">Times New Roman</option>
-            <option value="Courier New">Courier New</option>
-            <option value="Georgia">Georgia</option>
-            <option value="Verdana">Verdana</option>
-            <option value="Trebuchet MS">Trebuchet MS</option>
-            <option value="Impact">Impact</option>
-          </select>
-        </div>
       </div>
     );
   }
@@ -401,6 +409,14 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
         <div className="h-8 w-px shrink-0 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
 
         <div className="flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-br from-slate-50 to-white px-3 py-2 shadow-inner ring-1 ring-slate-100">
+          <button
+            type="button"
+            onClick={() => setShowFont(!showFont)}
+            className={`text-xs font-semibold transition-colors ${showFont ? "text-indigo-600" : "text-slate-500 hover:text-slate-700"}`}
+          >
+            A
+          </button>
+          {showFont && (<>
           <select
             aria-label="Font family"
             disabled={disabled}
@@ -417,12 +433,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
             <option value="Trebuchet MS">Trebuchet MS</option>
             <option value="Impact">Impact</option>
           </select>
-        </div>
-
-        <div className="h-8 w-px shrink-0 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
-
-        <div className="flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-br from-slate-50 to-white px-3 py-2 shadow-inner ring-1 ring-slate-100">
-          <span className="text-xs font-semibold text-slate-500">A</span>
+          <div className="h-6 w-px shrink-0 bg-slate-200" />
           <button
             type="button"
             aria-label="Decrease font size"
@@ -451,6 +462,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
           >
             <Plus className="h-4 w-4" />
           </button>
+          </>)}
         </div>
       </div>
     </div>

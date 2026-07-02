@@ -166,15 +166,39 @@ export default function ActivityFeed({
           const createdCount = meta.created as number | undefined;
           const updatedCount = meta.updated as number | undefined;
           const deletedCount = meta.deleted as number | undefined;
+          const createdTypes = meta.createdTypes as string[] | undefined;
+          const updatedTypes = meta.updatedTypes as string[] | undefined;
+          const deletedTypes = meta.deletedTypes as string[] | undefined;
+
+          const allSameType = (types: string[] | undefined, count: number | undefined) =>
+            types && types.length === count && count > 0 && types.every(t => t === types[0]);
 
           let detail: string;
           if (["object.created", "object.updated", "object.deleted"].includes(entry.action)) {
             const total = (createdCount ?? 0) + (updatedCount ?? 0) + (deletedCount ?? 0);
             if (total > 1) {
               const parts: string[] = [];
-              if (createdCount) parts.push(`${createdCount} ${entry.action === "object.created" ? "drew" : "added"}`);
-              if (updatedCount) parts.push(`${updatedCount} updated`);
-              if (deletedCount) parts.push(`${deletedCount} removed`);
+              if (createdCount) {
+                if (allSameType(createdTypes, createdCount)) {
+                  parts.push(`${createdCount} ${actionTypeLabel(createdTypes![0])}${createdCount > 1 ? "s" : ""}`);
+                } else {
+                  parts.push(`${createdCount} ${entry.action === "object.created" ? "drew" : "added"}`);
+                }
+              }
+              if (updatedCount) {
+                if (allSameType(updatedTypes, updatedCount)) {
+                  parts.push(`${updatedCount} ${actionTypeLabel(updatedTypes![0])}${updatedCount > 1 ? "s" : ""} updated`);
+                } else {
+                  parts.push(`${updatedCount} updated`);
+                }
+              }
+              if (deletedCount) {
+                if (allSameType(deletedTypes, deletedCount)) {
+                  parts.push(`${deletedCount} ${actionTypeLabel(deletedTypes![0])}${deletedCount > 1 ? "s" : ""} removed`);
+                } else {
+                  parts.push(`${deletedCount} removed`);
+                }
+              }
               detail = parts.join(", ");
             } else if (metaType) {
               detail = `${action} a ${shapeType}`;

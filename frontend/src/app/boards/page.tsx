@@ -4,7 +4,7 @@ import Navbar from "@/components/navbar";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { BoardGrid } from "@/components/boards/boardGrid";
 import { useUserStore } from "@/store/useUserStore";
-import { useEffect, useState, startTransition } from "react";
+import { useEffect, useState, useMemo, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getBoards, toggleStarBoard, type BoardWithMembers } from "@/lib/api";
 import { toast } from "sonner";
@@ -47,6 +47,16 @@ export default function BoardsPage() {
   const total = result?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const sortedBoards = useMemo(() => {
+    return [...boards].sort((a, b) => {
+      const aStarred = a.members.some((m) => m.userId === user?.id && m.isStarred);
+      const bStarred = b.members.some((m) => m.userId === user?.id && m.isStarred);
+      if (aStarred && !bStarred) return -1;
+      if (!aStarred && bStarred) return 1;
+      return 0;
+    });
+  }, [boards, user?.id]);
+
   const starMutation = useMutation({
     mutationFn: toggleStarBoard,
     onSuccess: () => {
@@ -87,7 +97,7 @@ export default function BoardsPage() {
         </div>
         <main className="flex-1 overflow-auto p-6">
           <BoardGrid
-            boards={boards || []}
+            boards={sortedBoards}
             onToggleStar={handleToggleStar}
             isStarred={isStarred}
           />

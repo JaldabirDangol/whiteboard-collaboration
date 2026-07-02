@@ -49,6 +49,7 @@ export default function Page() {
   const selectedShapeIdsRef = useRef(selectedShapeIds);
   selectedShapeIdsRef.current = selectedShapeIds;
   const clipboardRef = useRef<BoardShape[]>([]);
+  const requestHistoryEventRef = useRef<((type: "undo" | "redo") => void) | null>(null);
   const commentTargetShapeId = selectedShapeIds.size === 1 ? Array.from(selectedShapeIds)[0] : null;
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -336,6 +337,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
     toast.success(type === "undo" ? "Undo requested" : "Redo requested");
   };
+  requestHistoryEventRef.current = requestHistoryEvent;
 
   const downloadBlob = (blob: Blob, filename: string) => {
     if (typeof window === "undefined") return;
@@ -831,12 +833,12 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
-        requestHistoryEvent("undo");
+        requestHistoryEventRef.current?.("undo");
       }
 
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
         e.preventDefault();
-        requestHistoryEvent("redo");
+        requestHistoryEventRef.current?.("redo");
       }
 
       const offsetShape = (s: BoardShape, dx: number, dy: number): BoardShape => {
@@ -1059,7 +1061,10 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
       />
 
       <div className="relative flex min-h-0 flex-1">
-        <aside className="hidden w-24 border-r border-slate-200 bg-linear-to-b from-white via-white to-slate-50 px-2 py-3 md:flex md:items-start md:justify-center">
+        <div className={`group ${isFullscreen ? "absolute left-0 top-0 z-30 h-full" : ""}`}>
+        <aside className={`hidden border-r border-slate-200 bg-linear-to-b from-white via-white to-slate-50 px-2 py-3 md:flex md:items-start md:justify-center ${
+          isFullscreen ? "w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:w-36 group-hover:opacity-100" : "w-36"
+        }`}>
           <Header 
             layout="vertical" 
             disabled={mounted && !canEditBoard}
@@ -1067,6 +1072,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
             onRedo={() => requestHistoryEvent("redo")}
           />
         </aside>
+        </div>
 
         <main ref={boardWrapRef} className="relative min-w-0 flex-1 bg-[radial-gradient(circle_at_1px_1px,#dbe4ef_1px,transparent_1.3px)] bg-size-[20px_20px]">
           <div className="absolute left-2 top-2 z-20 md:hidden">
@@ -1422,7 +1428,20 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                   default: { const s = shape as { x?: number; y?: number }; bx = s.x ?? 0; by = s.y ?? 0; }
                 }
                 return (
-                  <Group key={`badge-${shape.id}`} x={bx} y={by}>
+                  <Group
+                    key={`badge-${shape.id}`}
+                    x={bx}
+                    y={by}
+                    onClick={() => {
+                      setSelectedShapeIds(new Set([shape.id]));
+                      setRightPanelTab("comments");
+                    }}
+                    onTap={() => {
+                      setSelectedShapeIds(new Set([shape.id]));
+                      setRightPanelTab("comments");
+                    }}
+                    style={{ cursor: "pointer" }}
+                  >
                     <Circle radius={9} fill="#6366f1" stroke="#fff" strokeWidth={2} />
                     <Text
                       x={-9} y={-7}

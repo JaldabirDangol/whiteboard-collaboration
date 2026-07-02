@@ -219,6 +219,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
             </select>
             </>)}
           </div>
+        </div>
       </div>
     );
   }

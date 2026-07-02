@@ -26,13 +26,10 @@ export const createComment = async (data: {
 }) => {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      // Resolve client-side shapeId → actual DB Shape.id (they differ when shape was
-      // persisted with gen_random_uuid). For newly persisted shapes (fix #2) they match,
-      // but old shapes need the lookup via data->>'id'.
       const dbShapeId = await resolveShapeDbId(data.boardId, data.shapeId);
       if (!dbShapeId) {
         if (attempt < 2) {
-          await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+          await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
           continue;
         }
         throw new Error("Shape not found in database");
@@ -67,7 +64,7 @@ export const createComment = async (data: {
     } catch (err) {
       const prismaErr = err as { code?: string };
       if (prismaErr.code === "P2003" && attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+        await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
         continue;
       }
       throw err;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { BoardShape, TextShape } from "./board-types";
+import type { BoardShape } from "./board-types";
 
 export function useTextEditing(
   boardWrapRef: React.RefObject<HTMLDivElement | null>,
@@ -14,7 +14,10 @@ export function useTextEditing(
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const editingTextIdRef = useRef<string | null>(null);
-  editingTextIdRef.current = editingTextId;
+
+  useEffect(() => {
+    editingTextIdRef.current = editingTextId;
+  }, [editingTextId]);
 
   const spawnTextarea = (
     shapeId: string,

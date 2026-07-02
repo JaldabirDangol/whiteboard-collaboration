@@ -15,6 +15,7 @@ import {
 import { canAccessBoard, canEditBoard } from "@/socket/boardAccess.js";
 import { getIO } from "@/socket/index.js";
 import { untrackOnline } from "@/socket/events/presenceEvents.js";
+import { updateBoardThumbnail } from "@/utils/generateThumbnail.js";
 
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const persistCounters = new Map<string, number>();
@@ -196,6 +197,10 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
       if (forceSnapshot || count === 1 || count % SNAPSHOT_INTERVAL === 0) {
         await saveBoardSnapshot(boardId, { shapes });
       }
+    }
+
+    if (hasChanges) {
+      updateBoardThumbnail(boardId, shapes as Record<string, unknown>[]);
     }
 
   } catch (error) {

@@ -23,7 +23,7 @@ interface BoardCardProps {
 }
 
 export const BoardCard = ({ board, onToggleStar, onDelete, isStarred = false }: BoardCardProps) => {
-  const isValidUrl = board?.thumbnailUrl?.startsWith("/") || board?.thumbnailUrl?.startsWith("http");
+  const isValidUrl = board?.thumbnailUrl?.startsWith("/") || board?.thumbnailUrl?.startsWith("http") || board?.thumbnailUrl?.startsWith("data:");
   const [imgSrc, setImgSrc] = useState(isValidUrl ? board.thumbnailUrl : null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -74,14 +74,22 @@ export const BoardCard = ({ board, onToggleStar, onDelete, isStarred = false }: 
       <Link href={`/boards/${board.id}`} className="block">
         <div className="relative h-40 w-full bg-gradient-to-br from-slate-50 to-slate-100">
           {imgSrc ? (
-            <Image
-              src={imgSrc}
-              alt={board.title || "Board thumbnail"}
-              fill
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              className="object-cover"
-              onError={() => setImgSrc(null)}
-            />
+            imgSrc.startsWith("data:") ? (
+              <img
+                src={imgSrc}
+                alt={board.title || "Board thumbnail"}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              <Image
+                src={imgSrc}
+                alt={board.title || "Board thumbnail"}
+                fill
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                className="object-cover"
+                onError={() => setImgSrc(null)}
+              />
+            )
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-indigo-50 flex items-center justify-center mb-2 shadow-inner">

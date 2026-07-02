@@ -104,7 +104,7 @@ export type BoardMessage = {
   };
 };
 
-export async function getBoardMessages(boardId: string): Promise<BoardMessage[]> {
+export async function getBoardMessages(boardId: string): Promise<{ messages: BoardMessage[]; total: number }> {
   const res = await fetch(`${apiUrl}/messages/board/${boardId}`, {
     credentials: "include",
   });

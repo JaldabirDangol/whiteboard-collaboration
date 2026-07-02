@@ -64,7 +64,7 @@ export default function Chat({
       try {
         const data = await getBoardMessages(boardId);
         if (!ignore) {
-          setMessages(Array.isArray(data) ? data : []);
+          setMessages(data.messages);
         }
       } catch {
         if (!ignore) {

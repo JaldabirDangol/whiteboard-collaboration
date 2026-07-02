@@ -133,7 +133,7 @@ describe("API Client - Boards", () => {
   it("shareBoard sends email and role", async () => {
     mockJsonResponse({ message: "Invitation sent successfully" });
     const { shareBoard } = await import("@/lib/api");
-    const result = await shareBoard("b1", "other@example.com", "EDITOR");
+    await shareBoard("b1", "other@example.com", "EDITOR");
     expect(mockFetch).toHaveBeenCalledWith(
       "http://localhost:3050/api/boards/b1/share",
       expect.objectContaining({
@@ -146,7 +146,7 @@ describe("API Client - Boards", () => {
   it("deleteBoard sends DELETE request", async () => {
     mockJsonResponse({ message: "Board deleted successfully" });
     const { deleteBoard } = await import("@/lib/api");
-    const result = await deleteBoard("b1");
+    await deleteBoard("b1");
     expect(mockFetch).toHaveBeenCalledWith(
       "http://localhost:3050/api/boards/b1",
       expect.objectContaining({ method: "DELETE" })
@@ -187,7 +187,7 @@ describe("API Client - Comments & Messages", () => {
   it("getBoardComments fetches with take param", async () => {
     mockJsonResponse([{ id: "c1", content: "test" }]);
     const { getBoardComments } = await import("@/lib/api");
-    const result = await getBoardComments("b1", 200);
+    await getBoardComments("b1", 200);
     expect(mockFetch).toHaveBeenCalledWith(
       "http://localhost:3050/api/comments/board/b1?take=200",
       expect.any(Object)
@@ -204,7 +204,7 @@ describe("API Client - Comments & Messages", () => {
   it("sendBoardMessage sends content", async () => {
     mockJsonResponse({ id: "m1", content: "Hello!" });
     const { sendBoardMessage } = await import("@/lib/api");
-    const result = await sendBoardMessage("b1", "Hello!");
+    await sendBoardMessage("b1", "Hello!");
     expect(mockFetch).toHaveBeenCalledWith(
       "http://localhost:3050/api/messages",
       expect.objectContaining({
@@ -223,7 +223,7 @@ describe("API Client - Snapshots", () => {
   it("getBoardSnapshots lists snapshot versions", async () => {
     mockJsonResponse([{ id: "snap1", version: 1, createdAt: "2024-01-01" }]);
     const { getBoardSnapshots } = await import("@/lib/api");
-    const result = await getBoardSnapshots("b1");
+    await getBoardSnapshots("b1");
     expect(mockFetch).toHaveBeenCalledWith(
       "http://localhost:3050/api/boards/b1/snapshots",
       expect.any(Object)
@@ -233,7 +233,7 @@ describe("API Client - Snapshots", () => {
   it("restoreBoardSnapshot sends POST", async () => {
     mockJsonResponse({ message: "Snapshot restored" });
     const { restoreBoardSnapshot } = await import("@/lib/api");
-    const result = await restoreBoardSnapshot("b1", "snap1");
+    await restoreBoardSnapshot("b1", "snap1");
     expect(mockFetch).toHaveBeenCalledWith(
       "http://localhost:3050/api/boards/b1/snapshots/snap1/restore",
       expect.objectContaining({ method: "POST" })
@@ -249,7 +249,7 @@ describe("API Client - Notifications", () => {
   it("getNotifications fetches all notifications", async () => {
     mockJsonResponse([{ id: "n1", type: "share_invite", message: "Invited" }]);
     const { getNotifications } = await import("@/lib/api");
-    const result = await getNotifications();
+    await getNotifications();
     expect(mockFetch).toHaveBeenCalledWith(
       "http://localhost:3050/api/notifications",
       expect.any(Object)

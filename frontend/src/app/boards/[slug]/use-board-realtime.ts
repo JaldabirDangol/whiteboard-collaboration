@@ -8,12 +8,10 @@ import {
   LOCAL_ORIGIN,
   REMOTE_ORIGIN,
   SHAPES_KEY,
-  SHAPE_KEY_PREFIX,
   isShapeKey,
   shapeKeyForId,
   idFromShapeKey,
   normalizeShapesForClient,
-  parseShapes,
   readShapesFromYBoard,
   toUint8,
 } from "./board-shape-utils";
@@ -44,6 +42,8 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
   const [serverReadOnly, setServerReadOnly] = useState(false);
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const hasRemoteDataRef = useRef(false);
+  const draftTimestampsRef = useRef<Map<string, number>>(new Map());
+  const committedShapesRef = useRef<BoardShape[]>([]);
 
   const setShapesWithCache = useCallback((value: React.SetStateAction<BoardShape[]>) => {
     setShapes((prev) => (typeof value === "function" ? (value as (prev: BoardShape[]) => BoardShape[])(prev) : value));
@@ -53,6 +53,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     const yBoard = yBoardRef.current;
     if (!yBoard) return;
     const committed = readShapesFromYBoard(yBoard);
+    committedShapesRef.current = committed;
     setShapesWithCache((prev) => {
       const committedIds = new Set(committed.map(s => s.id));
       const drafts = prev.filter(s => !committedIds.has(s.id));
@@ -101,8 +102,12 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
 
   const updateShapesLocally = useCallback((updater: (prev: BoardShape[]) => BoardShape[]) => {
+    const committed = committedShapesRef.current;
     setShapesWithCache((prev) => {
-      const next = normalizeShapesForClient(updater(prev));
+      const committedIds = new Set(committed.map(s => s.id));
+      const drafts = prev.filter(s => !committedIds.has(s.id));
+      const merged = [...committed, ...drafts];
+      const next = normalizeShapesForClient(updater(merged));
       persistShapes(next);
       return next;
     });
@@ -231,6 +236,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
     const onShapeDraft = ({ draft, userId: draftUserId }: { draft: BoardShape; userId?: string }) => {
       if (!draft || !draftUserId || draftUserId === userIdRef.current) return;
+      draftTimestampsRef.current.set(draftUserId, Date.now());
       setRemoteDraftShapes((prev) => {
         const next = new Map(prev);
         next.set(draftUserId, draft);
@@ -387,7 +393,22 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
 
         return changed ? next : prev;
       });
-    }, 2000);
+
+      setRemoteDraftShapes((prev) => {
+        let changed = false;
+        const next = new Map(prev);
+        const timestamps = draftTimestampsRef.current;
+        for (const [draftUserId] of next) {
+          const t = timestamps.get(draftUserId);
+          if (t && now - t > DRAFT_TTL_MS) {
+            next.delete(draftUserId);
+            timestamps.delete(draftUserId);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 5000);
 
     return () => {
       window.clearInterval(interval);

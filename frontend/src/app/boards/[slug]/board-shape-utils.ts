@@ -202,7 +202,7 @@ export const toUint8 = (value: unknown): Uint8Array => {
   return new Uint8Array();
 };
 
-export function serializeShapesToSvg(shapes: BoardShape[], title: string): string {
+export function serializeShapesToSvg(shapes: BoardShape[], title?: string): string {
   if (shapes.length === 0) {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 400" width="500" height="400"><rect width="100%" height="100%" fill="white"/></svg>`;
   }
@@ -271,6 +271,7 @@ export function serializeShapesToSvg(shapes: BoardShape[], title: string): strin
   });
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+  ${title ? `<title>${esc(title)}</title>` : ""}
   <rect width="100%" height="100%" fill="white"/>
   ${elements.join("\n  ")}
 </svg>`;

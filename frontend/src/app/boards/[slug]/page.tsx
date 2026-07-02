@@ -3,7 +3,7 @@
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Node as KonvaNode } from "konva/lib/Node";
 import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
-import { useCallback, useEffect, useMemo, useRef, useState, startTransition, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import Header from "@/components/canvas/header";
@@ -38,7 +38,7 @@ export default function Page() {
   const selectedTool = useToolStore((state) => state.selected);
   const color = useToolStore((state) => state.color ?? "#000000");
   const strokeWidth = useToolStore((state) => state.strokeWidth ?? 2);
-  const setTool = useToolStore((state) => state.setTool);
+
 
   const boardWrapRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -130,7 +130,6 @@ export default function Page() {
     remoteLaserStrokes,
     remoteDraftShapes,
     onlineUserIds,
-    serverReadOnly,
     forbiddenMessage,
     drawingRef,
   } = useBoardRealtime({
@@ -157,7 +156,6 @@ export default function Page() {
   const {
     editingTextId,
     setEditingTextId,
-    textareaRef,
     editingTextIdRef,
     spawnTextarea,
   } = useTextEditing(boardWrapRef, shapes, updateShapesLocally, shapesRef, zoomRef, viewportRef);

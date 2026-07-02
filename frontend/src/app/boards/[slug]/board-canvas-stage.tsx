@@ -5,7 +5,7 @@ import type { Node as KonvaNode } from "konva/lib/Node";
 import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { Arrow, Circle, Ellipse, Group, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
-import type { BoardShape, CircleShape, EllipseShape, ImageShape, LaserStroke, RectShape, TextShape } from "./board-types";
+import type { BoardShape, ImageShape, LaserStroke, RectShape } from "./board-types";
 import BoardImageShape from "./board-image-shape";
 import DraftShapeRenderer from "./draft-shape-renderer";
 

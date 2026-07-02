@@ -23,6 +23,10 @@ const entries = new Map<string, RateLimitEntry>();
 
 const key = (socketId: string, event: string) => `${socketId}:${event}`;
 
+export const resetRateLimits = () => {
+  entries.clear();
+};
+
 export const checkRateLimit = (socketId: string, event: string): boolean => {
   const config = defaults[event];
   if (!config) return true;

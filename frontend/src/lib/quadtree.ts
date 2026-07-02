@@ -87,11 +87,16 @@ export class Quadtree<T extends { id: string }> {
     const items = this.items;
     this.items = [];
     for (const item of items) {
+      let pushed = false;
       for (const child of this.children) {
         if (contains(child.bounds, item.aabb)) {
           child.insert(item.shape, item.aabb);
+          pushed = true;
           break;
         }
+      }
+      if (!pushed) {
+        this.items.push(item);
       }
     }
   }

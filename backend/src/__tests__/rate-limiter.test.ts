@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { checkRateLimit } from "@/socket/rateLimiter.js";
+import { checkRateLimit, resetRateLimits } from "@/socket/rateLimiter.js";
 
 describe("Rate Limiter", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    resetRateLimits();
   });
 
   afterEach(() => {

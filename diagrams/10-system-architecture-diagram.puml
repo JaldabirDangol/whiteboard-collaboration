@@ -1,0 +1,78 @@
+@startuml System_Architecture_Diagram
+
+!define RECTANGLE skinparam rectangle {
+  BackgroundColor #FEFEFE
+  BorderColor #333333
+  FontSize 12
+}
+
+skinparam package {
+  BackgroundColor #F8F9FA
+  BorderColor #666666
+}
+
+skinparam component {
+  BackgroundColor #E8F0FE
+  BorderColor #3366CC
+}
+
+package "Presentation Layer" as Presentation {
+  [Next.js App (React 19)] as NextApp
+  [Konva Canvas] as Canvas
+  [Zustand Store] as Zustand
+  [Socket.IO Client] as SocketClient
+  [Yjs Client Doc] as YjsClient
+  NextApp --> Canvas : renders
+  NextApp --> Zustand : tool/color/viewport
+  Canvas --> YjsClient : shape CRUD
+  YjsClient --> SocketClient : yjs:update transport
+}
+
+package "Application Layer" as Application {
+  [Express 5 HTTP Server] as Express
+  [Socket.IO Server] as SocketIO
+  [Yjs CRDT Engine] as YjsServer
+  [Prisma ORM] as Prisma
+  [Auth Service (JWT)] as Auth
+  [LRU Cache] as LRU
+  [Rate Limiter] as RateLimiter
+  [Board Services] as BoardSvc
+  Express --> Auth : JWT middleware
+  Express --> BoardSvc : REST routes
+  SocketIO --> RateLimiter : throttle check
+  SocketIO --> YjsServer : per-board Y.Doc
+  YjsServer --> LRU : evict inactive
+  SocketIO --> BoardSvc : persist shapes
+  BoardSvc --> Prisma : type-safe queries
+}
+
+database "Data Layer" as Data {
+  [PostgreSQL 15] as PG
+  [User, Board, BoardMember,
+   Shape, Snapshot, Comment,
+   Message, Asset, AuditLog,
+   Notification, BoardSettings] as Tables
+}
+
+cloud "External" as External {
+  [Cloudinary / CDN] as CDN
+  [Browser Cache] as BrowserCache
+}
+
+Presentation --> Application : HTTPS / WSS
+Application --> Data : TCP :5433
+Presentation --> External : HTTPS (assets)
+
+note left of Presentation
+  Single Page Application
+  Server rendered landing page
+  Client rendered canvas
+end note
+
+note right of Application
+  Node.js 20+
+  Port 3050
+  MAX_ACTIVE_BOARDS = 50
+end note
+
+@enduml

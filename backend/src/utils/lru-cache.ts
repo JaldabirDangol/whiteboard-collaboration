@@ -56,6 +56,12 @@ export class LRUCache<K, V> {
     return true;
   }
 
+  clear(): void {
+    this.map.clear();
+    this.head = null;
+    this.tail = null;
+  }
+
   keys(): K[] {
     return Array.from(this.map.keys());
   }

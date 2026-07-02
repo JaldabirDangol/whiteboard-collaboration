@@ -13,6 +13,10 @@ PlantUML files for the Whiteboard Collaboration project report.
 | 5 | `05-class-diagram.puml` | Class (DB models + Frontend types + Services) | Ch 4: System Design |
 | 6 | `06-component-diagram.puml` | Component (Frontend ↔ Backend ↔ DB) | Ch 4: System Design |
 | 7 | `07-deployment-diagram.puml` | Deployment (Browser → Server → Docker) | Ch 4: System Design |
+| 8 | `08-activity-diagram.puml` | Activity (Board collaboration workflow) | Ch 3: System Analysis |
+| 9 | `09-state-diagram.puml` | State (Shape lifecycle, Board connection, Y.Doc sync) | Ch 3: System Analysis |
+| 10 | `10-system-architecture-diagram.puml` | System Architecture (3-tier: Presentation/Application/Data) | Ch 4: System Design |
+| 11 | `11-object-diagram.puml` | Object (Runtime snapshot of instances) | Ch 3: System Analysis |
 
 ## How to render
 

@@ -3,7 +3,7 @@
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Node as KonvaNode, KonvaEventObject } from "konva/lib/Node";
 import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition, type ChangeEvent } from "react";
 import { Arrow, Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import { Minus, Plus } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -158,6 +158,15 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     if (followUserId) setFollowUserId(null);
   }, [followUserId]);
 
+  const quadtreeRef = useRef<Quadtree<BoardShape>>(null!);
+  if (!quadtreeRef.current) {
+    quadtreeRef.current = new Quadtree<BoardShape>({ x: -1e9, y: -1e9, w: 2e9, h: 2e9 });
+  }
+
+  const getShapeIdsInRect = useCallback((rect: { x: number; y: number; w: number; h: number }) => {
+    return quadtreeRef.current.query(rect).map((s) => s.id);
+  }, []);
+
   const {
     zoom,
     setZoom,
@@ -192,7 +201,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
       spawnTextarea(shapeId, "", shapeData);
     },
     onMarqueeSelect: (rect) => {
-      const ids = quadtreeRef.current.query(rect).map((s) => s.id);
+      const ids = quadtreeRef.current.query({ x: rect.x, y: rect.y, w: rect.width, h: rect.height }).map((s) => s.id);
       setSelectedShapeIds(new Set(ids));
     },
     getShapeIdsInRect,
@@ -282,18 +291,9 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
     return Array.from(seen.values());
   }, [shapes]);
 
-  const quadtreeRef = useRef<Quadtree<BoardShape>>(null!);
-  if (!quadtreeRef.current) {
-    quadtreeRef.current = new Quadtree<BoardShape>({ x: -1e9, y: -1e9, w: 2e9, h: 2e9 });
-  }
-
   useEffect(() => {
     quadtreeRef.current.rebuild(renderedShapes, getAABB);
   }, [renderedShapes]);
-
-  const getShapeIdsInRect = useCallback((rect: { x: number; y: number; w: number; h: number }) => {
-    return quadtreeRef.current.query(rect).map((s) => s.id);
-  }, []);
 
   const shapeTypeMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1419,7 +1419,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
                   }
                   case "text": bx = shape.x + 40; by = shape.y - 6; break;
                   case "image": bx = shape.x + shape.width; by = shape.y; break;
-                  default: if ("x" in shape && typeof (shape as any).x === "number") { bx = (shape as any).x; by = (shape as any).y ?? 0; }
+                  default: { const s = shape as { x?: number; y?: number }; bx = s.x ?? 0; by = s.y ?? 0; }
                 }
                 return (
                   <Group key={`badge-${shape.id}`} x={bx} y={by}>
@@ -1725,7 +1725,7 @@ const useImageElement = (url: string) => {
 
   useEffect(() => {
     if (!url) {
-      setImage(null);
+      startTransition(() => setImage(null));
       return;
     }
 

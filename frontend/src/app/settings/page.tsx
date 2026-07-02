@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/store/useUserStore";
 import { updateUser, deleteUser } from "@/lib/api";
@@ -27,7 +27,10 @@ export default function SettingsPage() {
   }, [loading, user, router]);
 
   useEffect(() => {
-    if (user?.name) setName(user.name);
+    if (user?.name) {
+      const n = user.name;
+      startTransition(() => setName(n));
+    }
   }, [user?.name]);
 
   const updateMutation = useMutation({

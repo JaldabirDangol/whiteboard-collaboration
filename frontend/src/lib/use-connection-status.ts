@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { acquireSocket, releaseSocket } from "./board-socket";
 
 export type ConnectionStatus = "connected" | "connecting" | "disconnected" | "error";
@@ -16,7 +16,7 @@ export const useConnectionStatus = () => {
     const onConnectError = () => setStatus("error");
 
     if (socket.connected) {
-      setStatus("connected");
+      startTransition(() => setStatus("connected"));
     }
 
     socket.on("connect", onConnect);

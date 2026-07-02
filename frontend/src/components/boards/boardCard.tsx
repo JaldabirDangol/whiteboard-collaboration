@@ -150,7 +150,7 @@ export const BoardCard = ({ board, onToggleStar, onDelete, isStarred = false }: 
         <DialogHeader>
           <DialogTitle>Delete board?</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete "{board.title}"? This action cannot be undone.
+            Are you sure you want to delete &quot;{board.title}&quot;? This action cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2">

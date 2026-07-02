@@ -4,7 +4,7 @@ import Navbar from "@/components/navbar";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { BoardGrid } from "@/components/boards/boardGrid";
 import { useUserStore } from "@/store/useUserStore";
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getBoards, toggleStarBoard, type BoardWithMembers } from "@/lib/api";
 import { toast } from "sonner";
@@ -21,7 +21,7 @@ export default function BoardsPage() {
   const [page, setPage] = useState(0);
 
   useEffect(() => {
-    setPage(0);
+    startTransition(() => setPage(0));
   }, [filter, search]);
 
   useEffect(() => {

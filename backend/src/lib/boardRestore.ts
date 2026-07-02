@@ -6,8 +6,6 @@ import {
   getBoardSnapshotById,
   setBoardCurrentSnapshotVersion,
 } from "@/controllers/boards/boardServices.js";
-import { logAction } from "@/lib/auditLog.js";
-
 const SHAPES_KEY = "shapes";
 const SHAPE_KEY_PREFIX = "shape:";
 const isShapeKey = (key: string) => key.startsWith(SHAPE_KEY_PREFIX);
@@ -55,13 +53,6 @@ export async function restoreSnapshot(boardId: string, userId: string, snapshotI
   doc.transact(() => {
     applyShapesToDoc(doc, shapes);
   }, UNDO_REDO_ORIGIN);
-
-  logAction({
-    boardId,
-    userId,
-    action: "snapshot:restore",
-    metadata: { version: snapshot.version, snapshotId },
-  }).catch(() => {});
 
   const state = Y.encodeStateAsUpdate(doc);
   const io = getIO();

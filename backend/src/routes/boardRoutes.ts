@@ -2,7 +2,6 @@ import { Router } from "express";
 import * as boardController from "@/controllers/boards/boardController.js";
 import * as objectController from "@/controllers/boards/boardObjectController.js";
 import * as settingsController from "@/controllers/boards/boardSettingsController.js";
-import { getBoardLogs } from "@/controllers/boards/auditLogController.js";
 import { checkBoardAccess } from "@/middleware/checkBoardAccess.js";
 
 const boardRoutes:Router = Router();
@@ -31,8 +30,5 @@ boardRoutes.post("/:id/snapshots/:snapshotId/restore", checkBoardAccess("EDITOR"
 // Board Settings
 boardRoutes.get("/:id/settings", checkBoardAccess("VIEWER"), settingsController.getSettings);
 boardRoutes.patch("/:id/settings", checkBoardAccess("ADMIN"), settingsController.updateSettings);
-
-// Audit Logs (any member)
-boardRoutes.get("/:id/logs", checkBoardAccess("VIEWER"), getBoardLogs);
 
 export default boardRoutes;

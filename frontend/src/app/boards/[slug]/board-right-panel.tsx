@@ -1,6 +1,5 @@
 import Chat from "@/components/canvas/chat";
 import ShapeComments from "@/components/canvas/shape-comments";
-import ActivityFeed from "@/components/canvas/activity-feed";
 
 type BoardMemberSummary = {
   id: string;
@@ -11,8 +10,8 @@ type BoardMemberSummary = {
 
 type BoardRightPanelProps = {
   members: BoardMemberSummary[];
-  rightPanelTab: "activity" | "chat" | "comments";
-  onRightPanelTabChange: (tab: "activity" | "chat" | "comments") => void;
+  rightPanelTab: "chat" | "comments" | null;
+  onRightPanelTabChange: (tab: "chat" | "comments" | null) => void;
   boardId: string;
   currentUserId?: string;
   selectedShapeId?: string | null;
@@ -40,7 +39,9 @@ export default function BoardRightPanel({
   const onlineCount = onlineUserIds?.size ?? 0;
 
   return (
-    <aside className="hidden h-full w-80 border-l border-slate-200 bg-white lg:flex lg:flex-col">
+    <aside className={`h-full w-80 border-l border-slate-200 bg-white ${
+      rightPanelTab ? "hidden lg:flex lg:flex-col" : "hidden"
+    }`}>
       <div className="border-b border-slate-100 px-4 py-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-semibold text-slate-900">Team</p>
@@ -95,12 +96,12 @@ export default function BoardRightPanel({
       </div>
 
       <div className="border-b border-slate-100 px-3 py-2.5">
-        <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-50 p-1 text-xs">
-          {(["activity", "chat", "comments"] as const).map((tab) => (
+        <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-50 p-1 text-xs">
+          {(["chat", "comments"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
-              onClick={() => onRightPanelTabChange(tab)}
+              onClick={() => onRightPanelTabChange(rightPanelTab === tab ? null : tab)}
               className={`rounded-lg px-2 py-1.5 capitalize font-medium transition-all ${
                 rightPanelTab === tab
                   ? "bg-white text-indigo-700 shadow-sm"
@@ -123,12 +124,6 @@ export default function BoardRightPanel({
             shapeId={selectedShapeId}
             shapeTypeMap={shapeTypeMap}
             className="h-full min-h-0"
-          />
-        ) : rightPanelTab === "activity" ? (
-          <ActivityFeed
-            boardId={boardId}
-            currentUserId={currentUserId}
-            userNames={Object.fromEntries(members.map((m) => [m.id, m.label]))}
           />
         ) : null}
       </div>

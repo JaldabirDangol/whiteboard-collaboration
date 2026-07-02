@@ -3,10 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AVATAR_COLORS, getInitials } from "./board-profile-utils";
-import { useQuery } from "@tanstack/react-query";
-import { getBoardActivity, type BoardActivity } from "@/lib/api";
 import SnapshotDialog from "./board-snapshot-dialog";
-import { describeActivityFromAction } from "@/lib/activity-description";
 
 type TopTab = "Files" | "Canvas" | "Export" | "History";
 
@@ -111,19 +108,6 @@ export default function BoardTopBar({
   showGrid,
   onToggleGrid,
 }: BoardTopBarProps) {
-  const { data: activityData } = useQuery({
-    queryKey: ["board-activity-history", boardId],
-    queryFn: () => getBoardActivity(boardId),
-    enabled: Boolean(boardId && historyOpen),
-    staleTime: 10_000,
-  });
-
-  const historyEntries = activityData ?? [];
-
-  const formatAction = (entry: BoardActivity) => {
-    return describeActivityFromAction(entry.action, entry.metadata ?? {});
-  };
-
   return (
     <div className="z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur-sm px-3 md:px-4">
       <div className="flex min-w-0 items-center gap-3">
@@ -302,17 +286,6 @@ export default function BoardTopBar({
                 <p><kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono">Ctrl/Cmd + Z</kbd> Undo</p>
                 <p><kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono">Ctrl/Cmd + Shift + Z</kbd> Redo</p>
               </div>
-              {historyEntries.length > 0 && (
-                <div className="max-h-60 overflow-auto space-y-1 border-t border-slate-100 pt-3">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Recent activity</p>
-                  {historyEntries.slice(0, 20).map((entry: BoardActivity) => (
-                    <div key={entry.id} className="flex items-center justify-between py-1.5 text-xs">
-                      <span className="text-slate-700">{formatAction(entry)}</span>
-                      <span className="text-slate-400">{new Date(entry.createdAt).toLocaleTimeString()}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </DialogContent>
         </Dialog>

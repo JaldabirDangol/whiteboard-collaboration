@@ -548,36 +548,6 @@ export async function restoreBoardSnapshot(boardId: string, snapshotId: string):
   return json;
 }
 
-// ── Activity / Audit Logs ──
-
-export type BoardActivity = {
-  id: string;
-  boardId: string;
-  userId: string;
-  action: string;
-  metadata: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string;
-  user?: {
-    id: string;
-    name: string | null;
-    email: string;
-  };
-};
-
-export async function getBoardActivity(boardId: string): Promise<BoardActivity[]> {
-  const res = await fetch(`${apiUrl}/boards/${boardId}/logs`, {
-    credentials: "include",
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to load activity");
-  }
-
-  const body = await res.json();
-  return Array.isArray(body) ? body : (body.logs ?? []);
-}
-
 export async function removeBoardMember(boardId: string, userId: string): Promise<{ message: string }> {
   const res = await fetch(`${apiUrl}/boards/${boardId}/member/${userId}`, {
     method: "DELETE",

@@ -1,0 +1,4 @@
+-- Drop AuditLog table
+ALTER TABLE IF EXISTS "AuditLog" DROP CONSTRAINT IF EXISTS "AuditLog_userId_fkey";
+ALTER TABLE IF EXISTS "AuditLog" DROP CONSTRAINT IF EXISTS "AuditLog_boardId_fkey";
+DROP TABLE IF EXISTS "AuditLog";

@@ -41,7 +41,6 @@ const mockPrisma = {
 };
 
 vi.mock("@/lib/prisma.js", () => ({ prisma: mockPrisma }));
-vi.mock("@/lib/auditLog.js", () => ({ logAction: vi.fn() }));
 vi.mock("@/controllers/notifications/notificationController.js", () => ({
   createNotification: vi.fn(() => Promise.resolve({ id: "notif-1" })),
 }));

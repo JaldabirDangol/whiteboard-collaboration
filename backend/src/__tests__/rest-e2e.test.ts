@@ -16,7 +16,6 @@ const mockBoardMemberFindUnique = vi.fn();
 const mockBoardMemberCreate = vi.fn();
 const mockNotificationFindUnique = vi.fn();
 const mockNotificationUpdate = vi.fn();
-const mockAuditLogCreate = vi.fn();
 
 vi.mock("@/lib/prisma.js", () => ({
   prisma: {
@@ -24,7 +23,6 @@ vi.mock("@/lib/prisma.js", () => ({
     board: { create: mockBoardCreate, findUnique: mockBoardFindUnique, findMany: mockBoardFindMany, findFirst: mockBoardFindFirst, count: mockBoardCount, update: vi.fn(), delete: vi.fn() },
     boardMember: { findUnique: mockBoardMemberFindUnique, create: mockBoardMemberCreate, findFirst: vi.fn(), upsert: vi.fn(), update: vi.fn(), delete: vi.fn() },
     notification: { findUnique: mockNotificationFindUnique, update: mockNotificationUpdate },
-    auditLog: { create: mockAuditLogCreate },
     $transaction: vi.fn((cb: any) => cb({
       shape: { findMany: vi.fn(), findUnique: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn() },
       comment: { findMany: vi.fn(), deleteMany: vi.fn() },
@@ -116,7 +114,6 @@ describe("REST E2E", () => {
       updatedAt: new Date(),
     });
     mockBoardFindFirst.mockResolvedValue(null);
-    mockAuditLogCreate.mockResolvedValue({ id: "log-1" });
 
     const res = await request(app)
       .post("/api/boards/create")

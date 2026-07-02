@@ -14,7 +14,6 @@ import {
 } from "@/controllers/boards/boardServices.js";
 import { canAccessBoard, canEditBoard } from "@/socket/boardAccess.js";
 import { getIO } from "@/socket/index.js";
-import { logAction } from "@/lib/auditLog.js";
 import { untrackOnline } from "@/socket/events/presenceEvents.js";
 
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -199,31 +198,6 @@ const persistBoardStateNow = async (boardId: string, doc: Y.Doc, userId?: string
       }
     }
 
-    if (logShapeChanges && userId && hasChanges) {
-      const singleType =
-        created === 1 && updated === 0 && deleted === 0 ? createdTypes[0] ?? null
-        : updated === 1 && created === 0 && deleted === 0 ? updatedTypes[0] ?? null
-        : deleted === 1 && created === 0 && updated === 0 ? deletedTypes[0] ?? null
-        : null;
-      logAction({
-        boardId,
-        userId,
-        action: created > 0 && updated === 0 && deleted === 0
-          ? "object.created"
-          : deleted > 0 && created === 0 && updated === 0
-            ? "object.deleted"
-            : "object.updated",
-        metadata: {
-          created,
-          updated,
-          deleted,
-          type: singleType,
-          createdTypes,
-          updatedTypes,
-          deletedTypes,
-        },
-      }).catch(() => {});
-    }
   } catch (error) {
     console.error("[board:persist] immediate persist failed", { boardId, error });
   }
@@ -275,11 +249,7 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       });
 
       if (joinerUserId) {
-        logAction({
-          boardId,
-          userId: joinerUserId,
-          action: "board.joined",
-        }).catch(() => {});
+        // no-op (join logging removed)
       }
     } catch (error) {
       console.error("[board:join]", error);
@@ -378,13 +348,6 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         applyShapesToDoc(doc, shapes);
       }, UNDO_REDO_ORIGIN);
 
-      logAction({
-        boardId,
-        userId: socket.data.user?.id ?? "system",
-        action: "board:undo",
-        metadata: { version: previousSnapshot.version },
-      }).catch(() => {});
-
       const state = Y.encodeStateAsUpdate(doc);
       io.to(boardId).emit("board:state", Array.from(state));
     } catch (error) {
@@ -440,13 +403,6 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       doc.transact(() => {
         applyShapesToDoc(doc, shapes);
       }, UNDO_REDO_ORIGIN);
-
-      logAction({
-        boardId,
-        userId: socket.data.user?.id ?? "system",
-        action: "board:redo",
-        metadata: { version: nextSnapshot.version },
-      }).catch(() => {});
 
       const state = Y.encodeStateAsUpdate(doc);
       io.to(boardId).emit("board:state", Array.from(state));

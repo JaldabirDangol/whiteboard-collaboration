@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 import * as boardService from "./boardServices.js";
-import { logAction } from "@/lib/auditLog.js";
 import { restoreSnapshot } from "@/lib/boardRestore.js";
 
 export async function createObject(req: Request, res: Response) {
@@ -14,7 +13,6 @@ export async function createObject(req: Request, res: Response) {
     if (!type || !data) return res.status(400).json({ error: "type and data are required" });
 
     const obj = await boardService.createBoardObject(boardId, userId, { type, data });
-    await logAction({ boardId, userId, action: "object.created", metadata: { objectId: obj.id, type } });
     return res.status(201).json(obj);
   } catch (error) {
     console.error("[createObject]", error);
@@ -39,7 +37,6 @@ export async function updateObject(req: Request, res: Response) {
     }
 
     const updated = await boardService.updateBoardObject(objectId, req.body);
-    await logAction({ boardId, userId: userId!, action: "object.updated", metadata: { objectId } });
     return res.json(updated);
   } catch (error) {
     console.error("[updateObject]", error);
@@ -64,7 +61,6 @@ export async function deleteObject(req: Request, res: Response) {
     }
 
     await boardService.deleteBoardObject(objectId);
-    await logAction({ boardId, userId: userId!, action: "object.deleted", metadata: { objectId } });
     return res.json({ message: "Object deleted" });
   } catch (error) {
     console.error("[deleteObject]", error);

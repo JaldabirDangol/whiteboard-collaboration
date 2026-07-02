@@ -53,7 +53,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
 
   if (layout === "vertical") {
     return (
-      <div className={`pointer-events-auto mt-3 flex h-[calc(100%-1.5rem)] w-full flex-col items-center rounded-[1.5rem] border border-slate-200/60 bg-gradient-to-b from-white via-white/95 to-slate-50/90 py-4 shadow-xl shadow-slate-200/40 backdrop-blur-md overflow-y-auto ${
+      <div className={`pointer-events-auto flex w-full flex-col items-center rounded-[1.5rem] border border-slate-200/60 bg-gradient-to-b from-white via-white/95 to-slate-50/90 py-4 shadow-xl shadow-slate-200/40 backdrop-blur-md ${
         disabled ? "opacity-60" : ""
       }`}>
         <div className="flex flex-col items-center gap-2">

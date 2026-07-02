@@ -12,7 +12,6 @@ const mockBoardMember = vi.fn();
 const mockBoardFindUnique = vi.fn();
 const mockShapeFindMany = vi.fn();
 const mockSnapshotFindFirst = vi.fn();
-const mockAuditLogCreate = vi.fn();
 const mockMessageCreate = vi.fn();
 const mockUserFindUnique = vi.fn();
 
@@ -22,7 +21,6 @@ vi.mock("@/lib/prisma.js", () => ({
     board: { findUnique: mockBoardFindUnique },
     shape: { findMany: mockShapeFindMany },
     snapshot: { findFirst: mockSnapshotFindFirst, findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
-    auditLog: { create: mockAuditLogCreate },
     message: { create: mockMessageCreate, findUnique: vi.fn(), delete: vi.fn() },
     comment: { findUnique: vi.fn(), delete: vi.fn() },
     user: { findUnique: mockUserFindUnique },
@@ -96,7 +94,6 @@ describe("Socket Integration", () => {
     mockBoardFindUnique.mockResolvedValue({ id: BOARD_ID, currentSnapshotVersion: null });
     mockShapeFindMany.mockResolvedValue([]);
     mockSnapshotFindFirst.mockResolvedValue(null);
-    mockAuditLogCreate.mockResolvedValue({ id: "log-1" });
     mockMessageCreate.mockImplementation((data: any) =>
       Promise.resolve({
         id: "msg-1",

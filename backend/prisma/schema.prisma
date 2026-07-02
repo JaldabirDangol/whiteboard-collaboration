@@ -17,7 +17,6 @@ model User {
   shapes   Shape[]
   messages Message[]
   comments Comment[]
-  logs     AuditLog[]
   notifications Notification[]
 
   createdAt DateTime @default(now())
@@ -37,7 +36,6 @@ model Board {
   messages  Message[]
   comments  Comment[]
   assets    Asset[]
-  logs      AuditLog[]
   notifications Notification[]
   settings  BoardSettings?
   thumbnailUrl String?
@@ -138,22 +136,6 @@ model Asset {
   type AssetType
 
   uploadedBy String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model AuditLog {
-  id String @id @default(uuid())
-
-  boardId String
-  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  action   String
-  metadata Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -61,7 +61,7 @@ export default function Page() {
   const connectionStatus = useConnectionStatus();
   const [chatOpen, setChatOpen] = useState(false);
   const [activeTopTab, setActiveTopTab] = useState<"Files" | "Canvas" | "Export" | "History">("Canvas");
-  const [rightPanelTab, setRightPanelTab] = useState<"activity" | "chat" | "comments">("chat");
+  const [rightPanelTab, setRightPanelTab] = useState<"chat" | "comments" | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [followUserId, setFollowUserId] = useState<string | null>(null);
@@ -69,7 +69,7 @@ export default function Page() {
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      boardWrapRef.current?.requestFullscreen();
+      boardWrapRef.current?.parentElement?.requestFullscreen();
     } else {
       document.exitFullscreen();
     }
@@ -1011,7 +1011,10 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
         activeTopTab={activeTopTab}
         onTopTabClick={onTopTabClick}
         chatOpen={chatOpen}
-        onToggleChat={() => setChatOpen((prev) => !prev)}
+        onToggleChat={() => {
+          setChatOpen((prev) => !prev);
+          setRightPanelTab((prev) => prev === "chat" ? null : "chat");
+        }}
         shareOpen={shareOpen}
         onShareOpenChange={setShareOpen}
         shareEmail={shareEmail}
@@ -1061,10 +1064,7 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
       />
 
       <div className="relative flex min-h-0 flex-1">
-        <div className={`group ${isFullscreen ? "absolute left-0 top-0 z-30 h-full" : ""}`}>
-        <aside className={`hidden border-r border-slate-200 bg-linear-to-b from-white via-white to-slate-50 px-2 py-3 md:flex md:items-start md:justify-center ${
-          isFullscreen ? "w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:w-36 group-hover:opacity-100" : "w-36"
-        }`}>
+        <aside className="hidden bg-linear-to-b from-white via-white to-slate-50 px-2 py-3 md:flex md:items-start md:justify-center overflow-y-auto max-h-full w-28 [&::-webkit-scrollbar]:hidden">
           <Header 
             layout="vertical" 
             disabled={mounted && !canEditBoard}
@@ -1072,7 +1072,6 @@ const [editingTextId, setEditingTextId] = useState<string | null>(null);
             onRedo={() => requestHistoryEvent("redo")}
           />
         </aside>
-        </div>
 
         <main ref={boardWrapRef} className="relative min-w-0 flex-1 bg-[radial-gradient(circle_at_1px_1px,#dbe4ef_1px,transparent_1.3px)] bg-size-[20px_20px]">
           <div className="absolute left-2 top-2 z-20 md:hidden">

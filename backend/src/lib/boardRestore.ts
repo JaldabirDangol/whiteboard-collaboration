@@ -45,8 +45,15 @@ export async function restoreSnapshot(boardId: string, userId: string, snapshotI
   const shapes = extractShapesFromSnapshot(snapshot);
 
   // DB first — if this fails, we abort without corrupting the in-memory Y.Doc
-  await replaceBoardShapes(boardId, userId, shapes as Record<string, unknown>[]);
+  const { orphanedComments } = await replaceBoardShapes(boardId, userId, shapes as Record<string, unknown>[]);
   await setBoardCurrentSnapshotVersion(boardId, snapshot.version);
+
+  try {
+    const io = getIO();
+    for (const { commentId, shapeId } of orphanedComments) {
+      io.to(boardId).emit("comment:removed", { commentId, shapeId });
+    }
+  } catch { /* socket not initialized */ }
 
   const doc = getYDoc(boardId);
 
@@ -55,6 +62,8 @@ export async function restoreSnapshot(boardId: string, userId: string, snapshotI
   }, UNDO_REDO_ORIGIN);
 
   const state = Y.encodeStateAsUpdate(doc);
-  const io = getIO();
-  io.to(boardId).emit("board:state", Array.from(state));
+  try {
+    const io = getIO();
+    io.to(boardId).emit("board:state", Array.from(state));
+  } catch { /* socket not initialized */ }
 }

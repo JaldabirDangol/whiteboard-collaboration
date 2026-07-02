@@ -51,13 +51,24 @@ export const checkRateLimit = (socketId: string, event: string): boolean => {
   return true;
 };
 
-// Cleanup stale entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, entry] of entries) {
-    entry.timestamps = entry.timestamps.filter((t) => now - t < 5000);
-    if (entry.timestamps.length === 0) {
-      entries.delete(k);
+let cleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+export const startCleanup = () => {
+  if (cleanupInterval) return;
+  cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [k, entry] of entries) {
+      entry.timestamps = entry.timestamps.filter((t) => now - t < 5000);
+      if (entry.timestamps.length === 0) {
+        entries.delete(k);
+      }
     }
+  }, 30_000);
+};
+
+export const stopCleanup = () => {
+  if (cleanupInterval !== null) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
   }
-}, 30_000);
+};

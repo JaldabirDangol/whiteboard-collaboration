@@ -130,8 +130,8 @@ export async function sendBoardMessage(boardId: string, content: string): Promis
     throw new Error("Failed to send message");
   }
 
-  const data = await res.json();
-  return data.data;
+  const body = await res.json();
+  return body.data;
 }
 
 export async function deleteBoardMessage(messageId: string, boardId: string): Promise<void> {
@@ -450,7 +450,7 @@ export async function getShapeComments(shapeId: string): Promise<BoardComment[]>
   return res.json();
 }
 
-export async function getBoardComments(boardId: string, take = 200): Promise<BoardComment[]> {
+export async function getBoardComments(boardId: string, take = 200): Promise<{ comments: BoardComment[]; total: number }> {
   const res = await fetch(`${apiUrl}/comments/board/${boardId}?take=${take}`, {
     credentials: "include",
   });
@@ -459,8 +459,7 @@ export async function getBoardComments(boardId: string, take = 200): Promise<Boa
     throw new Error("Failed to load comments");
   }
 
-  const body = await res.json();
-  return Array.isArray(body) ? body : (body?.comments ?? []);
+  return res.json();
 }
 
 export async function createComment(
@@ -479,8 +478,8 @@ export async function createComment(
     throw new Error("Failed to create comment");
   }
 
-  const data = await res.json();
-  return data.data;
+  const body = await res.json();
+  return body.data;
 }
 
 export async function getCommentCountsByBoard(boardId: string): Promise<Record<string, number>> {

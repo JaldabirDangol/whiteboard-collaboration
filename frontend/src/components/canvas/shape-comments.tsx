@@ -61,8 +61,8 @@ export default function ShapeComments({
         const data = await getBoardComments(boardId);
         if (!ignore) {
           const filtered = shapeId
-            ? data.filter((c) => (c.clientShapeId ?? c.shapeId) === shapeId)
-            : data;
+            ? data.comments.filter((c) => (c.clientShapeId ?? c.shapeId) === shapeId)
+            : data.comments;
           setComments(filtered);
         }
       } catch {

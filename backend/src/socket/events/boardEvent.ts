@@ -282,6 +282,13 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         return;
       }
 
+      // Hydrate doc if it was evicted from the LRU cache (empty = no shape:* keys)
+      const boardMap = doc.getMap<string>("board");
+      const hasShapes = Array.from(boardMap.keys()).some((k) => k.startsWith("shape:"));
+      if (!hasShapes && !boardMap.has("shapes")) {
+        await hydrateDocFromPersistence(boardId, doc);
+      }
+
       // Apply the change to the server's version of the doc
       Y.applyUpdate(doc, normalizedUpdate, CLIENT_UPDATE_ORIGIN);
 

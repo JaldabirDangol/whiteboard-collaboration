@@ -1,4 +1,4 @@
-import { Server } from "socket.io"
+import { Server, Socket } from "socket.io"
 import { Server as HttpServer } from "http"
 
 import { registerBoardEvents } from "@/socket/events/boardEvent.js"
@@ -6,22 +6,22 @@ import { registerPresenceEvents } from "@/socket/events/presenceEvents.js"
 import { registerChatEvents } from "@/socket/events/chatEvents.js"
 import { registerCommentEvents } from "@/socket/events/commentEvents.js"
 import { socketAuth } from "@/socket/middleware/socketAuth.js"
-import { checkRateLimit } from "@/socket/rateLimiter.js"
+import { checkRateLimit, startCleanup } from "@/socket/rateLimiter.js"
 
 
 let io: Server;
 
-// Rate-limited events — blocked events emit a "rate:limited" back to the client
 const RATE_LIMITED_EVENTS = new Set([
   "yjs:update", "laser:stroke", "presence:cursorMove",
   "chat:send", "chat:delete", "comment:add", "comment:delete",
   "board:undo", "board:redo",
 ]);
 
-const wrapWithRateLimit = <T extends (...args: unknown[]) => void>(socketId: string, event: string, handler: T): T => {
+const wrapWithRateLimit = <T extends (...args: unknown[]) => void>(socket: Socket, event: string, handler: T): T => {
   if (!RATE_LIMITED_EVENTS.has(event)) return handler;
   return ((...args: unknown[]) => {
-    if (!checkRateLimit(socketId, event)) {
+    if (!checkRateLimit(socket.id, event)) {
+      socket.emit("rate:limited", { event });
       return;
     }
     return handler(...args);
@@ -37,12 +37,15 @@ export const initSocket = (server: HttpServer) => {
   })
 
   io.use(socketAuth)
+  startCleanup()
 
   io.on("connection", (socket) => {
-    // Override socket.on to wrap rate-limited events
+    // Wrap socket.on to inject rate-limiting on high-frequency events.
+    // Note: overriding socket.on means socket.off may not match the original
+    // handler identity. Currently no backend code uses socket.off.
     const origOn = socket.on.bind(socket);
     socket.on = ((event: string, handler: (...args: unknown[]) => void) => {
-      return origOn(event, wrapWithRateLimit(socket.id, event, handler));
+      return origOn(event, wrapWithRateLimit(socket, event, handler));
     }) as typeof socket.on;
 
     registerBoardEvents(io, socket)

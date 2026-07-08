@@ -197,6 +197,7 @@ export default function Page() {
   if (!quadtreeRef.current) {
     quadtreeRef.current = new Quadtree<BoardShape>({ x: -1e9, y: -1e9, w: 2e9, h: 2e9 });
   }
+  const quadtreeReadyRef = useRef(false);
 
   const getShapeIdsInRect = useCallback((rect: { x: number; y: number; w: number; h: number }) => {
     return quadtreeRef.current.query(rect).map((s) => s.id);
@@ -328,7 +329,22 @@ export default function Page() {
 
   useEffect(() => {
     quadtreeRef.current.rebuild(renderedShapes, getAABB);
+    quadtreeReadyRef.current = true;
   }, [renderedShapes]);
+
+  const visibleShapes = useMemo(() => {
+    if (!quadtreeReadyRef.current || stageSize.width <= 1) return renderedShapes;
+
+    const padding = 500;
+    const viewRect = {
+      x: -viewport.x / zoom - padding,
+      y: -viewport.y / zoom - padding,
+      w: stageSize.width / zoom + padding * 2,
+      h: stageSize.height / zoom + padding * 2,
+    };
+
+    return quadtreeRef.current.query(viewRect);
+  }, [renderedShapes, viewport, zoom, stageSize]);
 
   const shapeTypeMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -940,7 +956,7 @@ export default function Page() {
             stageRef={stageRef}
             viewport={viewport}
             zoom={zoom}
-            renderedShapes={renderedShapes}
+            renderedShapes={visibleShapes}
             canEditBoard={canEditBoard}
             selectedShapeIds={selectedShapeIds}
             selectedShapeIdsRef={selectedShapeIdsRef}

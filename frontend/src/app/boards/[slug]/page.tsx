@@ -130,6 +130,7 @@ export default function Page() {
     remoteLaserStrokes,
     remoteDraftShapes,
     onlineUserIds,
+    remoteUserLabels,
     forbiddenMessage,
     drawingRef,
   } = useBoardRealtime({
@@ -197,6 +198,7 @@ export default function Page() {
   if (!quadtreeRef.current) {
     quadtreeRef.current = new Quadtree<BoardShape>({ x: -1e9, y: -1e9, w: 2e9, h: 2e9 });
   }
+  const quadtreeReadyRef = useRef(false);
 
   const getShapeIdsInRect = useCallback((rect: { x: number; y: number; w: number; h: number }) => {
     return quadtreeRef.current.query(rect).map((s) => s.id);
@@ -215,6 +217,7 @@ export default function Page() {
     normalizeRect,
     updateShapePosition,
     marqueeRect,
+    activeStroke,
   } = useBoardCanvasInteractions({
     selectedTool,
     canEdit: canEditBoard,
@@ -281,8 +284,14 @@ export default function Page() {
       labels[member.userId] = member.user.name?.trim() || member.user.email;
     }
 
+    for (const [uid, name] of Object.entries(remoteUserLabels)) {
+      if (!labels[uid]) {
+        labels[uid] = name;
+      }
+    }
+
     return labels;
-  }, [boardDetails]);
+  }, [boardDetails, remoteUserLabels]);
 
   const joinBoardMutation = useMutation({
     mutationFn: () => joinBoard(id),
@@ -326,9 +335,25 @@ export default function Page() {
     return Array.from(seen.values());
   }, [shapes]);
 
-  useEffect(() => {
+  useMemo(() => {
+    if (drawingRef.current) return;
     quadtreeRef.current.rebuild(renderedShapes, getAABB);
+    quadtreeReadyRef.current = true;
   }, [renderedShapes]);
+
+  const visibleShapes = useMemo(() => {
+    if (!quadtreeReadyRef.current || stageSize.width <= 1) return renderedShapes;
+
+    const padding = 500;
+    const viewRect = {
+      x: -viewport.x / zoom - padding,
+      y: -viewport.y / zoom - padding,
+      w: stageSize.width / zoom + padding * 2,
+      h: stageSize.height / zoom + padding * 2,
+    };
+
+    return quadtreeRef.current.query(viewRect);
+  }, [renderedShapes, viewport, zoom, stageSize]);
 
   const shapeTypeMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -907,7 +932,7 @@ export default function Page() {
         onToggleGrid={() => setShowGrid((prev) => !prev)}
       />
 
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 bg-[#f8fafc]">
         <aside className="hidden bg-linear-to-b from-white via-white to-slate-50 px-2 py-3 md:flex md:items-start md:justify-center overflow-y-auto max-h-full w-28 [&::-webkit-scrollbar]:hidden">
           <Header 
             layout="vertical" 
@@ -940,7 +965,7 @@ export default function Page() {
             stageRef={stageRef}
             viewport={viewport}
             zoom={zoom}
-            renderedShapes={renderedShapes}
+            renderedShapes={visibleShapes}
             canEditBoard={canEditBoard}
             selectedShapeIds={selectedShapeIds}
             selectedShapeIdsRef={selectedShapeIdsRef}
@@ -968,6 +993,7 @@ export default function Page() {
             editingTextId={editingTextId}
             setEditingTextId={setEditingTextId}
             spawnTextarea={spawnTextarea}
+            activeStroke={activeStroke}
           />
           <BoardConnectionStatus connectionStatus={connectionStatus} />
           <BoardZoomControls

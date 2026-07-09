@@ -39,9 +39,12 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
   const [remoteLaserStrokes, setRemoteLaserStrokes] = useState<LaserStroke[]>([]);
   const [remoteDraftShapes, setRemoteDraftShapes] = useState<Map<string, BoardShape>>(new Map());
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [remoteUserLabels, setRemoteUserLabels] = useState<Record<string, string>>({});
   const [serverReadOnly, setServerReadOnly] = useState(false);
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const hasRemoteDataRef = useRef(false);
+  const joinedRef = useRef(false);
+  const pendingUpdatesRef = useRef<Uint8Array[]>([]);
   const draftTimestampsRef = useRef<Map<string, number>>(new Map());
   const committedShapesRef = useRef<BoardShape[]>([]);
 
@@ -81,7 +84,6 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     const normalizedShapes = normalizeShapesForClient(nextShapes);
 
     doc.transact(() => {
-      // Delete removed shapes
       const existingKeys = new Set(Array.from(yBoard.keys()).filter(isShapeKey));
       const newIds = new Set(normalizedShapes.map(s => s.id));
       for (const key of existingKeys) {
@@ -89,11 +91,9 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
           yBoard.delete(key);
         }
       }
-      // Write per-shape entries
       for (const shape of normalizedShapes) {
         yBoard.set(shapeKeyForId(shape.id), JSON.stringify(shape));
       }
-      // Clean up old shapes blob if migrating
       if (yBoard.has(SHAPES_KEY)) {
         yBoard.delete(SHAPES_KEY);
       }
@@ -193,17 +193,36 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     const socket = acquireSocket();
     socketRef.current = socket;
 
+    const flushPendingUpdates = () => {
+      const pending = pendingUpdatesRef.current;
+      if (pending.length === 0) return;
+      pendingUpdatesRef.current = [];
+      for (const update of pending) {
+        socket.emit("yjs:update", { boardId, update: Array.from(update) });
+      }
+      console.log(`[yjs:flush] flushed ${pending.length} queued updates for board ${boardId}`);
+    };
+
     const onDocUpdate = (update: Uint8Array, origin: unknown) => {
       if (origin !== LOCAL_ORIGIN) return;
+      if (!joinedRef.current) {
+        pendingUpdatesRef.current.push(update);
+        console.log(`[yjs:queue] queued update (${update.length} bytes) — not yet joined board ${boardId}`);
+        return;
+      }
       socket.emit("yjs:update", { boardId, update: Array.from(update) });
     };
 
     const onInit = ({ yjsState }: { yjsState: unknown }) => {
+      joinedRef.current = true;
       hasRemoteDataRef.current = true;
       const update = toUint8(yjsState);
-      if (update.length === 0) return;
-      Y.applyUpdate(doc, update, REMOTE_ORIGIN);
+      if (update.length > 0) {
+        Y.applyUpdate(doc, update, REMOTE_ORIGIN);
+      }
       syncShapesFromYDoc();
+      flushPendingUpdates();
+      console.log(`[yjs:init] board ${boardId} joined — ${update.length} bytes initial state`);
     };
 
     const onUpdate = (rawUpdate: unknown) => {
@@ -212,6 +231,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       if (update.length === 0) return;
       Y.applyUpdate(doc, update, REMOTE_ORIGIN);
       syncShapesFromYDoc();
+      console.log(`[yjs:rcv] board ${boardId} — applied ${update.length} byte update (${committedShapesRef.current.length} shapes)`);
     };
 
     const onState = (rawUpdate: unknown) => {
@@ -244,9 +264,16 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       });
     };
 
-    const onCursorMove = ({ userId: incomingUserId, position }: { userId?: string; position?: { x: number; y: number } }) => {
+    const onCursorMove = ({ userId: incomingUserId, position, userName }: { userId?: string; position?: { x: number; y: number }; userName?: string }) => {
       if (!incomingUserId || !position) return;
       if (userIdRef.current && incomingUserId === userIdRef.current) return;
+
+      if (userName) {
+        setRemoteUserLabels((prev) => {
+          if (prev[incomingUserId] === userName) return prev;
+          return { ...prev, [incomingUserId]: userName };
+        });
+      }
 
       setRemoteCursors((prev) => ({
         ...prev,
@@ -273,6 +300,12 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
         next.delete(incomingUserId);
         return next;
       });
+      setRemoteUserLabels((prev) => {
+        if (!(incomingUserId in prev)) return prev;
+        const next = { ...prev };
+        delete next[incomingUserId];
+        return next;
+      });
     };
 
     const onBoardForbidden = ({ message }: { message?: string }) => {
@@ -291,10 +324,17 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       window.location.href = "/boards";
     };
 
-    const onUserOnline = (payload: { userId?: string }) => {
+    const onUserOnline = (payload: { userId?: string; userName?: string }) => {
       const uid = payload?.userId;
       if (!uid) return;
       setOnlineUserIds((prev) => new Set(prev).add(uid));
+      if (payload?.userName) {
+        setRemoteUserLabels((prev) => {
+          const label = payload.userName!;
+          if (prev[uid] === label) return prev;
+          return { ...prev, [uid]: label };
+        });
+      }
     };
 
     const onUserOffline = (payload: { userId?: string }) => {
@@ -422,6 +462,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     remoteLaserStrokes,
     remoteDraftShapes,
     onlineUserIds,
+    remoteUserLabels,
     persistShapes,
     updateShapesLocally,
     emitCursorMove,

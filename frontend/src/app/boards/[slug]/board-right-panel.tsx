@@ -65,13 +65,13 @@ export default function BoardRightPanel({
                     if (isOnline) onFollowUser?.(isFollowed ? null : member.id);
                   }}
                   className={`relative block rounded-full transition ${
-                    isOnline ? "cursor-pointer hover:ring-2 hover:ring-indigo-400" : "cursor-default"
+                    isOnline                     ? "cursor-pointer hover:ring-2 hover:ring-accent" : "cursor-default"
                   } ${isFollowed ? "ring-2 ring-amber-400 ring-offset-1" : ""}`}
                   title={`${member.label} (${member.role})${isOnline ? " — Online" : ""}${
                     isFollowed ? " [Following]" : isOnline ? " — Click to go to, right-click to follow" : ""
                   }`}
                 >
-                  <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 text-[11px] font-semibold text-white ring-2 ring-white shadow-sm">
+                  <div className="grid h-8 w-8 place-items-center rounded-full bg-accent text-[11px] font-semibold text-white ring-2 ring-white shadow-sm">
                     {member.initials}
                   </div>
                   {isOnline && (
@@ -104,7 +104,7 @@ export default function BoardRightPanel({
               onClick={() => onRightPanelTabChange(rightPanelTab === tab ? null : tab)}
               className={`rounded-lg px-2 py-1.5 capitalize font-medium transition-all ${
                 rightPanelTab === tab
-                  ? "bg-white text-indigo-700 shadow-sm"
+                  ? "bg-white text-accent shadow-sm"
                   : "text-slate-400 hover:text-slate-600"
               }`}
             >

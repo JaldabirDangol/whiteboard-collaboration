@@ -104,6 +104,10 @@ export const useBoardCanvasInteractions = ({
   const laserDraftId = useRef<string | null>(null);
   const laserTimers = useRef<Map<string, number>>(new Map());
   const lastDrawPoint = useRef<{ x: number; y: number } | null>(null);
+  const lastEraserUpdateRef = useRef(0);
+  const activeStrokeRef = useRef<BoardShape | null>(null);
+
+  const [activeStroke, setActiveStroke] = useState<BoardShape | null>(null);
   const pinchStart = useRef<{ distance: number; zoom: number; cx: number; cy: number } | null>(null);
   const touchIds = useRef<Set<number>>(new Set());
 
@@ -297,21 +301,21 @@ export const useBoardCanvasInteractions = ({
       return;
     }
 
-    setShapes((prev) => {
-      if (currentTool === "pen" || currentTool === "eraser") {
-        return [
-          ...prev,
-          {
-            id,
-            type: "line",
-            tool: currentTool as "pen" | "eraser",
-            points: [pointer.x, pointer.y],
-            color: colorRef.current,
-            strokeWidth: strokeWidthRef.current,
-          },
-        ];
-      }
+    if (currentTool === "pen" || currentTool === "eraser") {
+      const stroke: BoardShape = {
+        id,
+        type: "line",
+        tool: currentTool as "pen" | "eraser",
+        points: [pointer.x, pointer.y],
+        color: colorRef.current,
+        strokeWidth: strokeWidthRef.current,
+      };
+      activeStrokeRef.current = stroke;
+      setActiveStroke(stroke);
+      return;
+    }
 
+    setShapes((prev) => {
       if (currentTool === "line" || currentTool === "arrow") {
         return [
           ...prev,
@@ -430,7 +434,8 @@ export const useBoardCanvasInteractions = ({
     if (lastDrawPoint.current) {
       const dx = pointer.x - lastDrawPoint.current.x;
       const dy = pointer.y - lastDrawPoint.current.y;
-      if (Math.hypot(dx, dy) < MIN_DRAW_DELTA) return;
+      const drawDelta = currentTool === "eraser" ? 3 : MIN_DRAW_DELTA;
+      if (Math.hypot(dx, dy) < drawDelta) return;
     }
     lastDrawPoint.current = pointer;
 
@@ -453,6 +458,28 @@ export const useBoardCanvasInteractions = ({
             strokeWidth: current.strokeWidth,
           });
         }
+        return updated;
+      });
+      return;
+    }
+
+    if (currentTool === "eraser") {
+      const now = Date.now();
+      if (now - lastEraserUpdateRef.current < 16) return;
+      lastEraserUpdateRef.current = now;
+    }
+
+    if (currentTool === "pen" || currentTool === "eraser") {
+      setActiveStroke((prev) => {
+        if (!prev || prev.id !== targetId || prev.type !== "line") return prev;
+        const updated: BoardShape = {
+          ...prev,
+          points: [...prev.points, pointer.x, pointer.y],
+        };
+        if (emitShapeDraftRef.current) {
+          emitShapeDraftRef.current(updated);
+        }
+        activeStrokeRef.current = updated;
         return updated;
       });
       return;
@@ -586,27 +613,40 @@ export const useBoardCanvasInteractions = ({
 
     // Eraser: remove shapes intersected by the eraser stroke
     if (currentTool === "eraser" && draftId) {
-      updateShapesLocally((prev) => {
-        const eraserShape = prev.find((s) => s.id === draftId);
-        if (!eraserShape || eraserShape.type !== "line") return prev.filter((s) => s.id !== draftId);
+      const eraserShape = activeStrokeRef.current;
+      setActiveStroke(null);
+      activeStrokeRef.current = null;
+      if (eraserShape && eraserShape.type === "line" && eraserShape.points.length >= 4) {
         const eraserBounds = getAABB(eraserShape);
-        if (!eraserBounds) return prev.filter((s) => s.id !== draftId);
-        const getIds = getShapeIdsInRectRef.current;
-        if (getIds) {
-          const hitIds = new Set(getIds(eraserBounds));
-          hitIds.delete(draftId);
-          return prev.filter((s) => !hitIds.has(s.id));
+        if (eraserBounds) {
+          const getIds = getShapeIdsInRectRef.current;
+          updateShapesLocally((prev) => {
+            if (getIds) {
+              const hitIds = new Set(getIds(eraserBounds));
+              return prev.filter((s) => !hitIds.has(s.id));
+            }
+            return prev.filter((s) => {
+              const bounds = getAABB(s);
+              return bounds ? !intersects(eraserBounds, bounds) : true;
+            });
+          });
         }
-        return prev.filter((s) => {
-          if (s.id === draftId) return false;
-          const bounds = getAABB(s);
-          return bounds ? !intersects(eraserBounds, bounds) : true;
-        });
-      });
+      }
       return;
     }
 
-    // Discard single-point lines (dots from click without drag)
+    // Pen: commit active stroke to shapes
+    if (currentTool === "pen" && draftId) {
+      const stroke = activeStrokeRef.current;
+      setActiveStroke(null);
+      activeStrokeRef.current = null;
+      if (stroke && stroke.type === "line" && stroke.points.length >= 4) {
+        updateShapesLocally((prev) => [...prev, stroke]);
+      }
+      return;
+    }
+
+    // Discard single-point lines (dots from click without drag) for line/arrow tools
     updateShapesLocally((prev) =>
       prev.filter((s) => {
         if (s.type !== "line") return true;
@@ -680,5 +720,6 @@ export const useBoardCanvasInteractions = ({
     normalizeRect,
     updateShapePosition,
     marqueeRect,
+    activeStroke,
   };
 };

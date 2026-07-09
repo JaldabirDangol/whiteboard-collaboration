@@ -63,7 +63,7 @@ export default function BoardZoomControls({ zoom, setZoom, clampZoom, stageSize,
       <button
         type="button"
         onClick={() => setZoom(1)}
-        className="flex h-8 w-14 items-center justify-center rounded-lg text-xs font-bold text-indigo-600 transition hover:bg-indigo-50"
+        className="flex h-8 w-14 items-center justify-center rounded-lg text-xs font-bold text-accent transition hover:bg-accent/10"
         title="Reset zoom to 100%"
       >
         {Math.round(zoom * 100)}%

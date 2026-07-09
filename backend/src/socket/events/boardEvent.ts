@@ -19,6 +19,7 @@ import { updateBoardThumbnail } from "@/utils/generateThumbnail.js";
 
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const persistCounters = new Map<string, number>();
+const persistQueues = new Map<string, Promise<void>>();
 const roomMembers = new Map<string, Set<string>>();
 
 const SHAPES_KEY = "shapes";
@@ -216,9 +217,26 @@ const debouncedPersist = (boardId: string, doc: Y.Doc, userId?: string) => {
     boardId,
     setTimeout(async () => {
       persistTimers.delete(boardId);
-      await persistBoardStateNow(boardId, doc, userId, false, true);
+      enqueuePersist(boardId, doc, userId, false, true);
     }, PERSIST_DEBOUNCE_MS),
   );
+};
+
+const enqueuePersist = (
+  boardId: string,
+  doc: Y.Doc,
+  userId?: string,
+  forceSnapshot = false,
+  logShapeChanges = false,
+) => {
+  const prev = persistQueues.get(boardId) ?? Promise.resolve();
+  const next = prev.then(() =>
+    persistBoardStateNow(boardId, doc, userId, forceSnapshot, logShapeChanges),
+  );
+  persistQueues.set(boardId, next);
+  next.finally(() => {
+    if (persistQueues.get(boardId) === next) persistQueues.delete(boardId);
+  });
 };
 
 export const registerBoardEvents = (io: Server, socket: Socket) => {
@@ -247,6 +265,8 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         yjsState: Array.from(state),
         serverTime: Date.now(),
       });
+
+      console.log(`[yjs:server-init] board=${boardId} socket=${socket.id.slice(0,8)} shapes=${state.length}B`);
 
       const joinerUserId = socket.data.user?.id;
       socket.to(boardId).emit("board:userJoined", {
@@ -292,8 +312,22 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       // Apply the change to the server's version of the doc
       Y.applyUpdate(doc, normalizedUpdate, CLIENT_UPDATE_ORIGIN);
 
+      // Safety net: ensure socket is in the board room before broadcasting
+      if (!socket.rooms.has(boardId)) {
+        console.log(`[yjs:server] auto-joining socket ${socket.id.slice(0,8)} to board ${boardId} — was missing from room`);
+        socket.join(boardId);
+        trackRoomJoin(boardId, socket.id);
+        if (!joinedBoards.has(boardId)) {
+          joinedBoards.add(boardId);
+        }
+      }
+
       // Broadcast that specific change to everyone else in the room
+      const room = io.sockets.adapter.rooms.get(boardId);
+      const roomSize = room?.size ?? 0;
       socket.to(boardId).emit("yjs:update", Array.from(normalizedUpdate));
+
+      console.log(`[yjs:server] board=${boardId} socket=${socket.id.slice(0,8)} update=${normalizedUpdate.length}B room=${roomSize} -> others=${roomSize > 0 ? roomSize - 1 : 0}`);
 
       // Trigger debounced persist
       debouncedPersist(boardId, doc, socket.data.user?.id);
@@ -333,7 +367,7 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         persistTimers.delete(boardId);
       }
       const doc = getYDoc(boardId);
-      await persistBoardStateNow(boardId, doc, socket.data.user?.id, true);
+      await enqueuePersist(boardId, doc, socket.data.user?.id, true);
 
       const latestSnapshot = await getLatestBoardSnapshot(boardId);
       if (!latestSnapshot) return;
@@ -345,6 +379,7 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       }
 
       const previousSnapshot = await getSnapshotBeforeVersion(boardId, currentVersion);
+
       if (!previousSnapshot) return;
 
       const shapes = extractShapesFromSnapshot(previousSnapshot);
@@ -389,7 +424,7 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         persistTimers.delete(boardId);
       }
       const doc = getYDoc(boardId);
-      await persistBoardStateNow(boardId, doc, socket.data.user?.id, true);
+      await enqueuePersist(boardId, doc, socket.data.user?.id, true);
 
       const latestSnapshot = await getLatestBoardSnapshot(boardId);
       if (!latestSnapshot) return;
@@ -436,7 +471,7 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
     }
 
     const doc = getYDoc(boardId);
-    await persistBoardStateNow(boardId, doc, socket.data.user?.id, true);
+    await enqueuePersist(boardId, doc, socket.data.user?.id, true);
 
     const userId = socket.data.user?.id ?? socket.id;
     socket.leave(boardId);
@@ -460,7 +495,7 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       }
 
       const doc = getYDoc(boardId);
-      await persistBoardStateNow(boardId, doc, socket.data.user?.id, true);
+      await enqueuePersist(boardId, doc, socket.data.user?.id, true);
 
       trackRoomLeave(boardId, socket.id);
       socket.to(boardId).emit("board:userLeft", {

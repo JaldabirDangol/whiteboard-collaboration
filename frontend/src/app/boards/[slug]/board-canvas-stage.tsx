@@ -42,6 +42,7 @@ type CanvasStageProps = {
   editingTextId: string | null;
   setEditingTextId: (id: string | null) => void;
   spawnTextarea: (id: string, text?: string, position?: { x: number; y: number; fontSize: number; fontFamily: string; color: string }) => void;
+  activeStroke: BoardShape | null;
 };
 
 export default function BoardCanvasStage({
@@ -77,6 +78,7 @@ export default function BoardCanvasStage({
   editingTextId,
   setEditingTextId,
   spawnTextarea,
+  activeStroke,
 }: CanvasStageProps) {
   return (
     <Stage
@@ -334,6 +336,18 @@ export default function BoardCanvasStage({
 
             return null;
           })}
+          {activeStroke && activeStroke.type === "line" && (
+            <Line
+              points={activeStroke.points}
+              stroke={activeStroke.color}
+              strokeWidth={activeStroke.strokeWidth}
+              tension={0.5}
+              lineCap="round"
+              lineJoin="round"
+              listening={false}
+              globalCompositeOperation={activeStroke.tool === "eraser" ? "destination-out" : "source-over"}
+            />
+          )}
           {canEditBoard && selectedShapeIds.size > 0 && (
             <Transformer
               ref={transformerRef}

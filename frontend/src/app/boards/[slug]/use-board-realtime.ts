@@ -55,11 +55,14 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
   const syncShapesFromYDoc = useCallback(() => {
     const yBoard = yBoardRef.current;
     if (!yBoard) return;
+    const prevCommittedIds = new Set(committedShapesRef.current.map(s => s.id));
     const committed = readShapesFromYBoard(yBoard);
     committedShapesRef.current = committed;
     setShapesWithCache((prev) => {
       const committedIds = new Set(committed.map(s => s.id));
-      const drafts = prev.filter(s => !committedIds.has(s.id));
+      // Only keep shapes that are NEITHER committed NOR previously committed
+      // (true local drafts, not remotely-deleted shapes)
+      const drafts = prev.filter(s => !committedIds.has(s.id) && !prevCommittedIds.has(s.id));
       return [...committed, ...drafts];
     });
     // Clean remote drafts that are now committed
@@ -82,22 +85,31 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     if (!doc || !yBoard) return;
 
     const normalizedShapes = normalizeShapesForClient(nextShapes);
+    const committed = committedShapesRef.current;
+    const committedMap = new Map(committed.map(s => [s.id, s]));
 
     doc.transact(() => {
-      const existingKeys = new Set(Array.from(yBoard.keys()).filter(isShapeKey));
       const newIds = new Set(normalizedShapes.map(s => s.id));
-      for (const key of existingKeys) {
-        if (!newIds.has(idFromShapeKey(key))) {
-          yBoard.delete(key);
+
+      for (const id of committedMap.keys()) {
+        if (!newIds.has(id)) {
+          yBoard.delete(shapeKeyForId(id));
         }
       }
+
       for (const shape of normalizedShapes) {
-        yBoard.set(shapeKeyForId(shape.id), JSON.stringify(shape));
+        const existing = committedMap.get(shape.id);
+        if (!existing || JSON.stringify(existing) !== JSON.stringify(shape)) {
+          yBoard.set(shapeKeyForId(shape.id), JSON.stringify(shape));
+        }
       }
+
       if (yBoard.has(SHAPES_KEY)) {
         yBoard.delete(SHAPES_KEY);
       }
     }, LOCAL_ORIGIN);
+
+    committedShapesRef.current = readShapesFromYBoard(yBoard);
   }, []);
 
 

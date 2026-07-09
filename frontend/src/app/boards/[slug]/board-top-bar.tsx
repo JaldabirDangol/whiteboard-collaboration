@@ -183,7 +183,7 @@ export default function BoardTopBar({
 
         <Dialog open={shareOpen} onOpenChange={onShareOpenChange}>
           <DialogTrigger asChild>
-            <Button type="button" size="sm" className="gap-1.5 bg-accent text-white hover:bg-accent-hover shadow-md shadow-accent/20">
+            <Button type="button" size="sm" className="gap-1.5 shadow-md">
               <Share2 className="h-4 w-4" />
               Share
             </Button>

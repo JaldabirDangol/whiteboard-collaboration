@@ -4,7 +4,7 @@ import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Node as KonvaNode } from "konva/lib/Node";
 import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import Header from "@/components/canvas/header";
 import { useUserStore } from "@/store/useUserStore";
@@ -309,11 +309,14 @@ export default function Page() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user?.id]);
 
+  const queryClient = useQueryClient();
+
   const shareBoardMutation = useMutation({
     mutationFn: ({ email, role }: { email: string; role: "EDITOR" | "VIEWER" }) =>
       shareBoard(id, email, role),
     onSuccess: () => {
       toast.success("Board shared successfully");
+      queryClient.invalidateQueries({ queryKey: ["board-details", id] });
       setShareEmail("");
       setShareRole("VIEWER");
       setShareOpen(false);

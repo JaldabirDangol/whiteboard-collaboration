@@ -71,7 +71,7 @@ export default function BoardRightPanel({
                     isFollowed ? " [Following]" : isOnline ? " — Click to go to, right-click to follow" : ""
                   }`}
                 >
-                  <div className="grid h-8 w-8 place-items-center rounded-full bg-accent text-[11px] font-semibold text-white ring-2 ring-white shadow-sm">
+                  <div className="grid h-8 w-8 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground ring-2 ring-white shadow-sm">
                     {member.initials}
                   </div>
                   {isOnline && (

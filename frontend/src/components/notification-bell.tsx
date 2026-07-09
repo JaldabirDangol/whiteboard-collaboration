@@ -121,7 +121,7 @@ export default function NotificationBell() {
               <button
                 type="button"
                 onClick={() => markAllRead.mutate()}
-                className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-500"
+                className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover"
               >
                 <CheckCheck className="h-3 w-3" />
                 Mark all read
@@ -142,7 +142,7 @@ export default function NotificationBell() {
                     key={n.id}
                     className={cn(
                       "flex items-start gap-3 px-4 py-3 text-left text-sm transition-colors border-b border-slate-50 last:border-b-0",
-                      !n.readAt && "bg-indigo-50/40"
+                      !n.readAt && "bg-accent/8"
                     )}
                   >
                     <div className="flex-1 min-w-0">
@@ -155,7 +155,7 @@ export default function NotificationBell() {
                             type="button"
                             onClick={() => acceptMut.mutate(n.id)}
                             disabled={acceptMut.isPending}
-                            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:opacity-60"
+                            className="inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-hover disabled:opacity-60"
                           >
                             <Check className="h-3 w-3" />
                             Accept

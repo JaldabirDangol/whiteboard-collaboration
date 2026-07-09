@@ -142,7 +142,7 @@ export default function BoardTopBar({
               onClick={() => onTopTabClick(tab)}
               className={`pb-1 transition-all ${
                 tab === activeTopTab
-                  ? "border-b-2 border-indigo-600 font-medium text-indigo-600"
+                  ? "border-b-2 border-accent font-medium text-accent"
                   : "text-slate-400 hover:text-slate-600"
               }`}
             >
@@ -157,7 +157,7 @@ export default function BoardTopBar({
           type="button"
           onClick={onToggleGrid}
           className={`hidden h-8 w-8 items-center justify-center rounded-lg transition-colors md:flex ${
-            showGrid ? "bg-indigo-100 text-indigo-600" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            showGrid ? "bg-accent/10 text-accent" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
           }`}
           title={showGrid ? "Hide grid" : "Show grid"}
         >
@@ -183,7 +183,7 @@ export default function BoardTopBar({
 
         <Dialog open={shareOpen} onOpenChange={onShareOpenChange}>
           <DialogTrigger asChild>
-            <Button type="button" size="sm" className="gap-1.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white hover:from-indigo-500 hover:to-indigo-400 shadow-md shadow-indigo-500/20">
+            <Button type="button" size="sm" className="gap-1.5 bg-accent text-white hover:bg-accent-hover shadow-md shadow-accent/20">
               <Share2 className="h-4 w-4" />
               Share
             </Button>
@@ -202,7 +202,7 @@ export default function BoardTopBar({
                     onChange={(event) => onShareEmailChange(event.target.value)}
                     type="email"
                     placeholder="Search by email..."
-                    className="h-10 w-full rounded-xl border border-slate-200 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    className="h-10 w-full rounded-xl border border-slate-200 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
                   />
                   {userSuggestions.length > 0 && (
                     <ul className="absolute z-50 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
@@ -224,7 +224,7 @@ export default function BoardTopBar({
                 <select
                   value={shareRole}
                   onChange={(event) => onShareRoleChange(event.target.value as "EDITOR" | "VIEWER")}
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  className="h-10 w-full rounded-xl border border-slate-200 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/20"
                 >
                   <option value="VIEWER">Viewer</option>
                   <option value="EDITOR">Editor</option>
@@ -327,7 +327,7 @@ export default function BoardTopBar({
                   value={draftDisplayName}
                   onChange={(event) => onDraftDisplayNameChange(event.target.value)}
                   placeholder="Your name"
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  className="h-10 w-full rounded-xl border border-slate-200 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
                 />
               </div>
 

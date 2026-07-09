@@ -41,7 +41,7 @@ export default function LandingPage() {
       <div className="absolute inset-0 bg-grid-white pointer-events-none" />
       <header className="relative flex items-center justify-between px-8 py-5 border-b border-white/[0.06] backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <div className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center shadow-lg shadow-accent/30">
             <span className="text-white font-bold">W</span>
           </div>
           <h1 className="text-xl font-bold">WhiteboardX</h1>
@@ -51,7 +51,7 @@ export default function LandingPage() {
             Login
           </Link>
           <Link href="/signup">
-            <Button size="sm" className="bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 shadow-md shadow-indigo-500/20">
+            <Button size="sm" className="bg-accent hover:bg-accent-hover shadow-md shadow-accent/20">
               Sign Up
             </Button>
           </Link>
@@ -66,12 +66,12 @@ export default function LandingPage() {
           transition={{ duration: 0.6 }}
           className="max-w-3xl"
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-medium mb-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent text-sm font-medium mb-6">
             <Sparkles className="h-3.5 w-3.5" />
             Real-time collaborative whiteboard
           </div>
 
-          <h2 className="text-5xl md:text-6xl font-extrabold mb-6 bg-linear-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+          <h2 className="text-5xl md:text-6xl font-extrabold mb-6 text-white text-balance">
             Collaborate on a Whiteboard in Real-Time
           </h2>
 
@@ -82,7 +82,7 @@ export default function LandingPage() {
 
           <div className="flex items-center justify-center gap-4">
             <Link href="/signup">
-              <Button size="lg" className="bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 px-6 shadow-lg shadow-indigo-600/25">
+              <Button size="lg" className="bg-accent hover:bg-accent-hover px-6 shadow-lg shadow-accent/25">
                 Get Started
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -106,10 +106,10 @@ export default function LandingPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.2 + i * 0.1 }}
             >
-              <Card className="bg-white/[0.03] border-white/[0.06] hover:border-indigo-500/30 hover:bg-white/[0.06] transition-all duration-300 hover:-translate-y-0.5">
+              <Card className="bg-white/[0.03] border-white/[0.06] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 hover:-translate-y-0.5">
                 <CardContent className="p-6">
-                  <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-indigo-500/20 to-indigo-600/10 flex items-center justify-center mb-4 shadow-inner">
-                    <feature.icon className="h-5 w-5 text-indigo-400" />
+                  <div className="h-11 w-11 rounded-xl bg-accent/15 flex items-center justify-center mb-4">
+                    <feature.icon className="h-5 w-5 text-accent" />
                   </div>
                   <h3 className="text-lg font-semibold mb-2 text-slate-200">{feature.title}</h3>
                   <p className="text-slate-400 text-sm leading-relaxed">{feature.desc}</p>
@@ -134,7 +134,7 @@ export default function LandingPage() {
             Invite your team and build ideas together in seconds.
           </p>
           <Link href="/signup">
-            <Button size="lg" className="bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 px-8 shadow-lg shadow-indigo-600/25">Create Free Account</Button>
+            <Button size="lg" className="bg-accent hover:bg-accent-hover px-8 shadow-lg shadow-accent/25">Create Free Account</Button>
           </Link>
         </motion.div>
       </section>

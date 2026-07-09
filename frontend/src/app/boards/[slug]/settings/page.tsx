@@ -134,7 +134,7 @@ export default function BoardSettingsPage() {
   if (loading || boardLoading || settingsLoading || !user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-accent" />
       </div>
     );
   }
@@ -159,7 +159,7 @@ export default function BoardSettingsPage() {
         </button>
 
         <div className="flex items-center gap-4 mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <div className="h-14 w-14 rounded-2xl bg-accent flex items-center justify-center shadow-lg shadow-accent/30">
             <Settings className="h-6 w-6 text-white" />
           </div>
           <div>
@@ -173,11 +173,11 @@ export default function BoardSettingsPage() {
             <>
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
                 <div className="flex items-center gap-3 mb-5">
-                  <div className="h-10 w-10 rounded-xl bg-indigo-100 flex items-center justify-center">
+                  <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center">
                     {settings?.isPublic ? (
-                      <Globe className="h-5 w-5 text-indigo-600" />
+                      <Globe className="h-5 w-5 text-accent" />
                     ) : (
-                      <Lock className="h-5 w-5 text-indigo-600" />
+                      <Lock className="h-5 w-5 text-accent" />
                     )}
                   </div>
                   <div>
@@ -195,7 +195,7 @@ export default function BoardSettingsPage() {
                     onClick={handleTogglePublic}
                     disabled={settingsMutation.isPending}
                     className={`relative h-7 w-12 rounded-full transition-colors ${
-                      settings?.isPublic ? "bg-indigo-600" : "bg-slate-300"
+                      settings?.isPublic ? "bg-accent" : "bg-slate-300"
                     }`}
                   >
                     <span
@@ -228,7 +228,7 @@ export default function BoardSettingsPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Enter password"
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all pr-10"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all pr-10"
                       />
                       <button
                         onClick={() => setShowPassword(!showPassword)}
@@ -240,7 +240,7 @@ export default function BoardSettingsPage() {
                     <button
                       onClick={handleSetPassword}
                       disabled={!password.trim() || settingsMutation.isPending}
-                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-medium hover:from-indigo-500 hover:to-indigo-400 disabled:opacity-50 transition-all"
+                      className="px-4 py-2.5 rounded-xl bg-accent text-white font-medium hover:bg-accent-hover disabled:opacity-50 transition-all"
                     >
                       {settingsMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : "Set"}
                     </button>
@@ -268,7 +268,7 @@ export default function BoardSettingsPage() {
                         className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-slate-50 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-medium text-sm">
+                          <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center text-white font-medium text-sm">
                             {member.user.name?.[0] || member.user.email[0].toUpperCase()}
                           </div>
                           <div>
@@ -292,7 +292,7 @@ export default function BoardSettingsPage() {
                               }
                             }}
                             disabled={isCurrentUser || roleMutation.isPending}
-                            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50 transition-all"
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-50 transition-all"
                           >
                             <option value="ADMIN">Admin</option>
                             <option value="EDITOR">Editor</option>
@@ -365,7 +365,7 @@ export default function BoardSettingsPage() {
               </div>
 
               <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-medium">
+                <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center text-white font-medium">
                   {user.email[0].toUpperCase()}
                 </div>
                 <div>

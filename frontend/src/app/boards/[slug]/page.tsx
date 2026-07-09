@@ -216,6 +216,7 @@ export default function Page() {
     normalizeRect,
     updateShapePosition,
     marqueeRect,
+    activeStroke,
   } = useBoardCanvasInteractions({
     selectedTool,
     canEdit: canEditBoard,
@@ -327,7 +328,8 @@ export default function Page() {
     return Array.from(seen.values());
   }, [shapes]);
 
-  useEffect(() => {
+  useMemo(() => {
+    if (drawingRef.current) return;
     quadtreeRef.current.rebuild(renderedShapes, getAABB);
     quadtreeReadyRef.current = true;
   }, [renderedShapes]);
@@ -923,7 +925,7 @@ export default function Page() {
         onToggleGrid={() => setShowGrid((prev) => !prev)}
       />
 
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 bg-[#f8fafc]">
         <aside className="hidden bg-linear-to-b from-white via-white to-slate-50 px-2 py-3 md:flex md:items-start md:justify-center overflow-y-auto max-h-full w-28 [&::-webkit-scrollbar]:hidden">
           <Header 
             layout="vertical" 
@@ -984,6 +986,7 @@ export default function Page() {
             editingTextId={editingTextId}
             setEditingTextId={setEditingTextId}
             spawnTextarea={spawnTextarea}
+            activeStroke={activeStroke}
           />
           <BoardConnectionStatus connectionStatus={connectionStatus} />
           <BoardZoomControls

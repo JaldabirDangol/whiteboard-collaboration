@@ -70,7 +70,7 @@ export const BoardCard = ({ board, onToggleStar, onDelete, isStarred = false }: 
 
   return (
     <>
-    <div className="group relative flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-indigo-200 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
+    <div className="group relative flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-accent hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
       <Link href={`/boards/${board.id}`} className="block">
         <div className="relative h-40 w-full bg-gradient-to-br from-slate-50 to-slate-100">
           {imgSrc ? (
@@ -92,8 +92,8 @@ export const BoardCard = ({ board, onToggleStar, onDelete, isStarred = false }: 
             )
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-indigo-50 flex items-center justify-center mb-2 shadow-inner">
-                <span className="text-2xl font-bold text-indigo-300">A</span>
+              <div className="h-16 w-16 rounded-2xl bg-accent/10 flex items-center justify-center mb-2">
+                <span className="text-2xl font-bold text-accent">A</span>
               </div>
               <span className="text-xs font-medium text-slate-400">No Preview</span>
             </div>
@@ -143,7 +143,7 @@ export const BoardCard = ({ board, onToggleStar, onDelete, isStarred = false }: 
       </div>
 
       <Link href={`/boards/${board.id}`} className="block p-4">
-        <h3 className="font-semibold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">
+        <h3 className="font-semibold text-slate-800 truncate group-hover:text-accent transition-colors">
           {board.title}
         </h3>
         <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1.5">

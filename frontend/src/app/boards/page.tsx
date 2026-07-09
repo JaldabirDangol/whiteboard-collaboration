@@ -86,7 +86,7 @@ export default function BoardsPage() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <div className="h-8 w-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
           <span className="text-slate-500 text-sm">Loading...</span>
         </div>
       </div>
@@ -124,7 +124,7 @@ export default function BoardsPage() {
                   onClick={() => setPage(i)}
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                     i === page
-                      ? "bg-indigo-600 text-white"
+                      ? "bg-accent text-white"
                       : "text-slate-600 hover:bg-slate-50"
                   }`}
                 >

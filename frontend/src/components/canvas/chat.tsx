@@ -219,15 +219,15 @@ export default function Chat({
               className={cn(
                 "max-w-[88%] rounded-2xl px-3.5 py-2.5",
                 isMine
-                  ? "ml-auto bg-indigo-600 text-white rounded-br-lg"
+                  ? "ml-auto bg-accent text-white rounded-br-lg"
                   : "bg-slate-100 text-slate-900 rounded-bl-lg"
               )}
             >
               <div className="flex items-center justify-between gap-2 mb-0.5">
-                <span className={cn("text-[10px] font-medium", isMine ? "text-indigo-200" : "text-slate-500")}>
+                <span className={cn("text-[10px] font-medium", isMine ? "text-white/80" : "text-slate-500")}>
                   {isMine ? "You" : sender}
                 </span>
-                <span className={cn("text-[10px]", isMine ? "text-indigo-200" : "text-slate-400")}>
+                <span className={cn("text-[10px]", isMine ? "text-white/60" : "text-slate-400")}>
                   {formatTimestamp(message.createdAt)}
                 </span>
               </div>
@@ -239,7 +239,7 @@ export default function Chat({
                   onClick={() => handleDelete(message)}
                   className={cn(
                     "mt-1.5 text-[10px] flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity",
-                    isMine ? "text-indigo-200" : "text-rose-500"
+                    isMine ? "text-white/70" : "text-rose-500"
                   )}
                 >
                   <Trash2 className="h-3 w-3" />
@@ -263,13 +263,13 @@ export default function Chat({
               }
             }}
             placeholder="Type a message..."
-            className="h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/10"
+            className="h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-900 outline-none transition focus:border-accent focus:bg-white focus:ring-2 focus:ring-accent/10"
           />
           <button
             type="button"
             onClick={handleSend}
             disabled={sending || !input.trim()}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white transition hover:from-indigo-500 hover:to-indigo-400 disabled:cursor-not-allowed disabled:opacity-60 shadow-sm"
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 shadow-sm"
           >
             {sending ? (
               <Loader2 className="h-4 w-4 animate-spin" />

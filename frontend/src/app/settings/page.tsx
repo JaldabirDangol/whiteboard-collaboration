@@ -60,7 +60,7 @@ export default function SettingsPage() {
   if (loading || !user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-accent" />
       </div>
     );
   }
@@ -81,7 +81,7 @@ export default function SettingsPage() {
         </button>
 
         <div className="flex items-center gap-4 mb-10">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-indigo-500/30">
+          <div className="h-14 w-14 rounded-2xl bg-accent flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-accent/30">
             {userInitials}
           </div>
           <div>
@@ -117,7 +117,7 @@ export default function SettingsPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your name"
-                  className="h-10 w-full rounded-xl border border-slate-300 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  className="h-10 w-full rounded-xl border border-slate-300 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
                 />
               </div>
 

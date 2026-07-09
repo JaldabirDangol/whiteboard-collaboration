@@ -72,8 +72,8 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
                     disabled
                       ? "cursor-not-allowed bg-slate-100/50 text-slate-400"
                       : isSelected
-                        ? "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 ring-2 ring-indigo-400/50"
-                        : "bg-white/80 text-slate-600 hover:bg-slate-100 hover:scale-105"
+                    ? "bg-accent text-white shadow-lg shadow-accent/30"
+                    : "bg-white/80 text-slate-600 hover:bg-slate-100 hover:scale-105"
                   }`}
                 >
                   <Icon className={`h-5 w-5 transition-transform ${isSelected ? '' : 'group-hover:scale-110'}`} />
@@ -93,7 +93,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
               disabled={disabled}
               value={color}
               onChange={(event) => setColor(event.target.value)}
-              className="h-10 w-10 cursor-pointer rounded-2xl border-2 border-slate-200 bg-white p-1 shadow-md transition-all hover:scale-110 hover:border-indigo-300 hover:shadow-lg"
+              className="h-10 w-10 cursor-pointer rounded-2xl border-2 border-slate-200 bg-white p-1 shadow-md transition-all hover:scale-110 hover:border-accent hover:shadow-lg"
             />
             <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: color }} />
           </div>
@@ -107,8 +107,8 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
               disabled
                 ? "cursor-not-allowed border-slate-200 bg-slate-100/50"
                 : fill
-                  ? "border-indigo-400 bg-indigo-50 shadow-md"
-                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-md"
+                ? "border-accent bg-accent/10 shadow-md"
+                : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-md"
             }`}
           >
             <div
@@ -154,8 +154,8 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
                   disabled
                     ? "cursor-not-allowed opacity-50"
                     : strokeWidth === preset 
-                      ? "bg-indigo-500 text-white shadow-md" 
-                      : "bg-slate-200 text-slate-600"
+                    ? "bg-accent text-white shadow-md" 
+                    : "bg-slate-200 text-slate-600"
                 }`}
                 style={{ width: Math.max(16, preset + 4), height: Math.max(16, preset + 4) }}
               />
@@ -168,7 +168,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
             <button
               type="button"
               onClick={() => setShowFont(!showFont)}
-              className={`text-xs font-semibold transition-colors ${showFont ? "text-indigo-600" : "text-slate-500 hover:text-slate-700"}`}
+              className={`text-xs font-semibold transition-colors ${showFont ? "text-accent" : "text-slate-500 hover:text-slate-700"}`}
             >
               A
             </button>
@@ -190,7 +190,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
               max={120}
               value={fontSize}
               onChange={(e) => setFontSize(Math.max(8, Math.min(120, Math.round(Number(e.target.value)))))}
-              className="h-8 w-14 rounded-lg border border-slate-200 bg-white px-2 text-center text-sm font-bold text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              className="h-8 w-14 rounded-lg border border-slate-200 bg-white px-2 text-center text-sm font-bold text-slate-700 shadow-inner focus:ring-2 focus:ring-accent/20 focus:border-accent"
             />
             <button
               type="button"
@@ -206,7 +206,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
               disabled={disabled}
               value={fontFamily}
               onChange={(e) => setFontFamily(e.target.value)}
-              className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-accent/20 focus:border-accent"
             >
               <option value="Arial">Arial</option>
               <option value="Helvetica">Helvetica</option>
@@ -252,7 +252,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
 
         <div className="h-8 w-px shrink-0 bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
 
-        <div className="flex shrink-0 items-center gap-1 rounded-2xl bg-gradient-to-br from-indigo-50 to-white p-1.5 shadow-sm ring-1 ring-indigo-100">
+        <div className="flex shrink-0 items-center gap-1 rounded-2xl bg-accent/5 p-1.5 shadow-sm ring-1 ring-accent/10">
           {tools.map((t) => {
             const Icon = t.icon;
             const isSelected = selected === t.tool;
@@ -266,8 +266,8 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
                   disabled
                     ? "cursor-not-allowed bg-slate-100 text-slate-400"
                     : isSelected
-                      ? "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-md shadow-indigo-500/30"
-                      : "text-slate-600 hover:bg-white hover:text-slate-800 hover:shadow-sm"
+                    ? "bg-accent text-white shadow-md shadow-accent/30"
+                    : "text-slate-600 hover:bg-white hover:text-slate-800 hover:shadow-sm"
                 }`}
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -288,7 +288,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
                 disabled={disabled}
                 onClick={() => setColor(preset)}
                 className={`relative h-7 w-7 shrink-0 rounded-full transition-all hover:scale-110 hover:shadow-md ${
-                  color === preset ? "ring-2 ring-offset-2 ring-indigo-500" : ""
+                  color === preset ? "ring-2 ring-offset-2 ring-accent" : ""
                 }`}
                 style={{ backgroundColor: preset }}
               >
@@ -310,7 +310,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
               disabled={disabled}
               value={color}
               onChange={(event) => setColor(event.target.value)}
-              className="h-8 w-8 cursor-pointer rounded-xl border-2 border-slate-200 bg-transparent p-0.5 transition-all hover:border-indigo-300 hover:scale-105"
+              className="h-8 w-8 cursor-pointer rounded-xl border-2 border-slate-200 bg-transparent p-0.5 transition-all hover:border-accent hover:scale-105"
             />
           </div>
 
@@ -325,8 +325,8 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
               disabled
                 ? "cursor-not-allowed border-slate-200 bg-slate-100/50"
                 : fill
-                  ? "border-indigo-400 bg-indigo-50 shadow-sm"
-                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                ? "border-accent bg-accent/10 shadow-sm"
+                : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
             }`}
           >
             <div
@@ -372,7 +372,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
               max={STROKE_MAX}
               value={strokeWidth}
               onChange={(event) => setStroke(Number(event.target.value))}
-              className="h-8 w-14 shrink-0 rounded-lg border border-slate-200 bg-white px-2 text-center text-sm font-bold text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              className="h-8 w-14 shrink-0 rounded-lg border border-slate-200 bg-white px-2 text-center text-sm font-bold text-slate-700 shadow-inner focus:ring-2 focus:ring-accent/20 focus:border-accent"
             />
           </div>
           
@@ -398,7 +398,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
                 disabled
                   ? "cursor-not-allowed opacity-50"
                   : strokeWidth === preset 
-                    ? "bg-indigo-500 text-white shadow-md" 
+                    ? "bg-accent text-white shadow-md" 
                     : "bg-white text-slate-600 hover:shadow-sm"
               }`}
               style={{ width: Math.max(20, preset + 8), height: Math.max(20, preset + 8) }}
@@ -413,7 +413,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
           <button
             type="button"
             onClick={() => setShowFont(!showFont)}
-            className={`text-xs font-semibold transition-colors ${showFont ? "text-indigo-600" : "text-slate-500 hover:text-slate-700"}`}
+              className={`text-xs font-semibold transition-colors ${showFont ? "text-accent" : "text-slate-500 hover:text-slate-700"}`}
           >
             A
           </button>
@@ -423,7 +423,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
             disabled={disabled}
             value={fontFamily}
             onChange={(e) => setFontFamily(e.target.value)}
-            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 shadow-inner focus:ring-2 focus:ring-accent/20 focus:border-accent"
           >
             <option value="Arial">Arial</option>
             <option value="Helvetica">Helvetica</option>
@@ -452,7 +452,7 @@ export default function Header({ layout = "horizontal", disabled = false, onUndo
             max={120}
             value={fontSize}
             onChange={(e) => setFontSize(Math.max(8, Math.min(120, Math.round(Number(e.target.value)))))}
-            className="h-8 w-14 shrink-0 rounded-lg border border-slate-200 bg-white px-2 text-center text-sm font-bold text-slate-700 shadow-inner focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            className="h-8 w-14 shrink-0 rounded-lg border border-slate-200 bg-white px-2 text-center text-sm font-bold text-slate-700 shadow-inner focus:ring-2 focus:ring-accent/20 focus:border-accent"
           />
           <button
             type="button"

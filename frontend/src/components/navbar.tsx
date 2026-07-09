@@ -101,14 +101,14 @@ const Navbar = ({ search = "", onSearchChange }: NavbarProps) => {
           placeholder="Search boards..."
           value={search}
           onChange={(e) => onSearchChange?.(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
         />
       </div>
 
       <div className="flex items-center gap-2">
         <NotificationBell />
         <div className="flex items-center gap-2.5 pr-3 py-1.5 pl-1.5 bg-slate-50 rounded-xl border border-slate-200">
-          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium shadow-sm">
+          <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center text-white text-sm font-medium shadow-sm">
             {userInitials}
           </div>
           <span className="text-sm font-medium text-slate-600 hidden sm:block">
@@ -127,7 +127,7 @@ const Navbar = ({ search = "", onSearchChange }: NavbarProps) => {
         </button>
 
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger className="flex items-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-medium text-sm hover:from-indigo-500 hover:to-indigo-400 transition-all shadow-md shadow-indigo-500/20">
+          <DialogTrigger className="flex items-center gap-2 py-2.5 px-4 rounded-xl bg-accent text-white font-medium text-sm hover:bg-accent-hover transition-all shadow-md shadow-accent/20">
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Board</span>
           </DialogTrigger>
@@ -147,7 +147,7 @@ const Navbar = ({ search = "", onSearchChange }: NavbarProps) => {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="My Awesome Board"
-                  className="w-full border border-slate-200 p-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  className="w-full border border-slate-200 p-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
                 />
               </div>
 
@@ -160,14 +160,14 @@ const Navbar = ({ search = "", onSearchChange }: NavbarProps) => {
                   value={thumbnailUrl}
                   onChange={(e) => setThumbnailUrl(e.target.value)}
                   placeholder="https://example.com/image.jpg"
-                  className="w-full border border-slate-200 p-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                />
+                className="w-full border border-slate-200 p-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
+              />
               </div>
 
               <button
                 type="submit"
                 disabled={createBoard.isPending}
-                className="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 text-white py-3 rounded-xl font-medium text-sm hover:from-indigo-500 hover:to-indigo-400 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                className="w-full bg-accent text-white py-3 rounded-xl font-medium text-sm hover:bg-accent-hover transition-all disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {createBoard.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

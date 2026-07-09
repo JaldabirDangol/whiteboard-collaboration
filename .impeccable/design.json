@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-08T00:00:00.000Z",
+  "title": "Design System: WhiteboardX",
+  "extensions": {
+    "colorMeta": {
+      "background": { "role": "neutral", "displayName": "Paper", "canonical": "oklch(1 0 0)", "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.51 0 0)", "oklch(0.63 0 0)", "oklch(0.75 0 0)", "oklch(0.87 0 0)", "oklch(1 0 0)"] },
+      "foreground": { "role": "neutral", "displayName": "Ink", "canonical": "oklch(0.145 0 0)", "tonalRamp": ["oklch(0.145 0 0)", "oklch(0.25 0 0)", "oklch(0.36 0 0)", "oklch(0.47 0 0)", "oklch(0.58 0 0)", "oklch(0.69 0 0)", "oklch(0.80 0 0)", "oklch(0.92 0 0)"] },
+      "primary": { "role": "neutral", "displayName": "Charcoal", "canonical": "oklch(0.205 0 0)", "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.205 0 0)", "oklch(0.32 0 0)", "oklch(0.44 0 0)", "oklch(0.56 0 0)", "oklch(0.68 0 0)", "oklch(0.80 0 0)", "oklch(0.92 0 0)"] },
+      "secondary": { "role": "neutral", "displayName": "Stone", "canonical": "oklch(0.97 0 0)", "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.51 0 0)", "oklch(0.63 0 0)", "oklch(0.75 0 0)", "oklch(0.86 0 0)", "oklch(0.97 0 0)"] },
+      "muted": { "role": "neutral", "displayName": "Stone", "canonical": "oklch(0.97 0 0)" },
+      "muted-foreground": { "role": "neutral", "displayName": "Ash", "canonical": "oklch(0.556 0 0)", "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.556 0 0)", "oklch(0.63 0 0)", "oklch(0.75 0 0)", "oklch(0.87 0 0)", "oklch(0.97 0 0)"] },
+      "border": { "role": "neutral", "displayName": "Clay", "canonical": "oklch(0.922 0 0)", "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.28 0 0)", "oklch(0.42 0 0)", "oklch(0.55 0 0)", "oklch(0.68 0 0)", "oklch(0.80 0 0)", "oklch(0.922 0 0)", "oklch(0.97 0 0)"] },
+      "deep-iris": { "role": "accent", "displayName": "Deep Iris", "canonical": "oklch(0.527 0.154 278)", "tonalRamp": ["oklch(0.15 0.154 278)", "oklch(0.25 0.154 278)", "oklch(0.35 0.154 278)", "oklch(0.45 0.154 278)", "oklch(0.527 0.154 278)", "oklch(0.62 0.14 278)", "oklch(0.72 0.10 278)", "oklch(0.85 0.06 278)"] },
+      "deep-iris-hover": { "role": "accent", "displayName": "Deep Iris Hover", "canonical": "oklch(0.585 0.148 278)" },
+      "destructive": { "role": "accent", "displayName": "Ember", "canonical": "oklch(0.577 0.245 27.325)", "tonalRamp": ["oklch(0.15 0.245 27)", "oklch(0.28 0.245 27)", "oklch(0.38 0.245 27)", "oklch(0.48 0.245 27)", "oklch(0.577 0.245 27)", "oklch(0.66 0.20 27)", "oklch(0.76 0.14 27)", "oklch(0.88 0.07 27)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero headlines on the landing page only. Not used in the app UI." },
+      "headline": { "displayName": "Headline", "purpose": "Section titles, modal headings, board titles. One per view." },
+      "title": { "displayName": "Title", "purpose": "Card titles, sidebar section headers, tab labels." },
+      "body": { "displayName": "Body", "purpose": "Default reading text. Max 65-75ch for prose." },
+      "label": { "displayName": "Label", "purpose": "Form labels, button text, metadata, table cells. Most common type token." }
+    },
+    "shadows": [
+      { "name": "surface-lifted", "value": "0 4px 24px rgba(0,0,0,0.06)", "purpose": "Subtle lift for hovered interactive elements." },
+      { "name": "overlay", "value": "0 8px 32px rgba(0,0,0,0.10)", "purpose": "Dialog and panel elevation." },
+      { "name": "toolbar", "value": "0 4px 20px rgba(0,0,0,0.08)", "purpose": "Canvas toolbar and floating panels." },
+      { "name": "accent-glow", "value": "0 4px 12px rgba(79, 98, 235, 0.25)", "purpose": "Deep Iris accent glow on primary CTAs (landing page only)." }
+    ],
+    "motion": [
+      { "name": "ease-out-quart", "value": "cubic-bezier(0.25, 0.75, 0.5, 1)", "purpose": "Default easing for state transitions." },
+      { "name": "state-duration", "value": "150ms", "purpose": "Hover, focus, and active state transitions." },
+      { "name": "reveal-duration", "value": "200ms", "purpose": "Dialog entrance, panel slide, tooltip appear." },
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Exaggerated exit or emphasis (rare)." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1536px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "Primary call-to-action. Charcoal background with Paper text.",
+      "html": "<button class=\"ds-btn-primary\">Create Board</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; height: 2rem; padding: 0.5rem 0.625rem; border-radius: 0.625rem; border: 1px solid transparent; background: oklch(0.205 0 0); color: oklch(0.985 0 0); font-size: 0.875rem; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background 0.15s cubic-bezier(0.25,0.75,0.5,1), transform 0.15s cubic-bezier(0.25,0.75,0.5,1), box-shadow 0.15s cubic-bezier(0.25,0.75,0.5,1); } .ds-btn-primary:hover { background: color-mix(in oklch, oklch(0.205 0 0) 80%, white); transform: translateY(-1px); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px oklch(0.708 0 0), 0 0 0 4px oklch(1 0 0); } .ds-btn-primary:disabled { opacity: 0.5; pointer-events: none; }"
+    },
+    {
+      "name": "Accent Button",
+      "kind": "button",
+      "refersTo": "button-accent",
+      "description": "Primary action in Deep Iris. Used for the most important CTAs (landing page, New Board).",
+      "html": "<button class=\"ds-btn-accent\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"19\"/><line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"/></svg> New Board</button>",
+      "css": ".ds-btn-accent { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; height: 2rem; padding: 0.5rem 1rem; border-radius: 0.625rem; border: none; background: linear-gradient(to right, oklch(0.527 0.154 278), oklch(0.50 0.15 278)); color: white; font-size: 0.875rem; font-weight: 500; white-space: nowrap; cursor: pointer; box-shadow: 0 4px 12px rgba(79, 98, 235, 0.25); transition: background 0.15s cubic-bezier(0.25,0.75,0.5,1), transform 0.15s cubic-bezier(0.25,0.75,0.5,1), box-shadow 0.15s cubic-bezier(0.25,0.75,0.5,1); } .ds-btn-accent:hover { background: linear-gradient(to right, oklch(0.585 0.148 278), oklch(0.56 0.14 278)); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(79, 98, 235, 0.35); } .ds-btn-accent:active { transform: translateY(1px); } .ds-btn-accent:focus-visible { outline: none; box-shadow: 0 0 0 2px oklch(0.708 0 0), 0 0 0 4px oklch(1 0 0); } .ds-btn-accent:disabled { opacity: 0.5; pointer-events: none; }"
+    },
+    {
+      "name": "Outlined Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action. Transparent with border stroke.",
+      "html": "<button class=\"ds-btn-outline\">Cancel</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; height: 2rem; padding: 0.5rem 0.625rem; border-radius: 0.625rem; border: 1px solid oklch(0.922 0 0); background: transparent; color: oklch(0.145 0 0); font-size: 0.875rem; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background 0.15s cubic-bezier(0.25,0.75,0.5,1); } .ds-btn-outline:hover { background: oklch(0.97 0 0); } .ds-btn-outline:active { transform: translateY(1px); } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 2px oklch(0.708 0 0); } .ds-btn-outline:disabled { opacity: 0.5; pointer-events: none; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Standard text input with soft rounded corners and Deep Iris focus ring.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search boards...\" type=\"text\" />",
+      "css": ".ds-input { width: 100%; height: 2.5rem; padding: 0.75rem 0.875rem; border-radius: 0.875rem; border: 1px solid oklch(0.922 0 0); background: oklch(1 0 0); color: oklch(0.145 0 0); font-size: 0.875rem; outline: none; transition: border-color 0.15s cubic-bezier(0.25,0.75,0.5,1), box-shadow 0.15s cubic-bezier(0.25,0.75,0.5,1); } .ds-input:focus { border-color: oklch(0.527 0.154 278); box-shadow: 0 0 0 2px color-mix(in oklch, oklch(0.527 0.154 278) 20%, transparent); } .ds-input::placeholder { color: oklch(0.556 0 0); } .ds-input:disabled { background: oklch(0.97 0 0); opacity: 0.6; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Content container with soft edges and subtle border.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">Project Draft</div><div class=\"ds-card-desc\">Last edited 2 hours ago</div></div>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 1rem; padding: 1rem; border-radius: 0.875rem; background: oklch(1 0 0); border: 1px solid color-mix(in oklch, oklch(0.145 0 0) 10%, transparent); transition: transform 0.15s cubic-bezier(0.25,0.75,0.5,1), box-shadow 0.15s cubic-bezier(0.25,0.75,0.5,1); } .ds-card:hover { transform: translateY(-2px); box-shadow: 0 4px 24px rgba(0,0,0,0.06); } .ds-card-title { font-family: Geist, system-ui, sans-serif; font-weight: 600; font-size: 0.9375rem; line-height: 1.3; color: oklch(0.145 0 0); } .ds-card-desc { font-size: 0.875rem; color: oklch(0.556 0 0); line-height: 1.5; }"
+    },
+    {
+      "name": "Dialog",
+      "kind": "custom",
+      "refersTo": "dialog",
+      "description": "Modal overlay with backdrop blur and zoom-in entrance.",
+      "html": "<div style=\"position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.10);backdrop-filter:blur(2px);\"><div class=\"ds-dialog\"><div class=\"ds-dialog-header\"><div class=\"ds-dialog-title\">Share Board</div></div><div class=\"ds-dialog-body\"><p style=\"font-size:0.875rem;color:oklch(0.556 0 0);margin:0;\">Invite a collaborator by email</p></div></div></div>",
+      "css": ".ds-dialog { width: 100%; max-width: 28rem; padding: 1rem; border-radius: 0.875rem; background: oklch(1 0 0); border: 1px solid color-mix(in oklch, oklch(0.145 0 0) 10%, transparent); animation: ds-zoom-in 0.2s cubic-bezier(0.25,0.75,0.5,1); } @keyframes ds-zoom-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } } .ds-dialog-header { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; } .ds-dialog-title { font-family: Geist, system-ui, sans-serif; font-weight: 700; font-size: 1rem; line-height: 1.2; color: oklch(0.145 0 0); } .ds-dialog-body { display: flex; flex-direction: column; gap: 0.75rem; }"
+    },
+    {
+      "name": "Canvas Tool Button",
+      "kind": "custom",
+      "refersTo": "tool-button",
+      "description": "A tool selector button from the canvas toolbar. Selected state uses Deep Iris gradient.",
+      "html": "<div style=\"display:flex;gap:4px;padding:6px;border-radius:1rem;background:oklch(0.97 0 0);\"><button class=\"ds-tool-btn ds-tool-btn-selected\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 20h9\"/><path d=\"M16.376 3.622a1 1 0 013.002 3.002L7.368 18.635a2 2 0 01-.855.506l-2.872.838a.5.5 0 01-.62-.62l.838-2.872a2 2 0 01.506-.854z\"/></svg></button><button class=\"ds-tool-btn\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"/></svg></button><button class=\"ds-tool-btn\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/></svg></button></div>",
+      "css": ".ds-tool-btn { display: flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border-radius: 0.75rem; border: none; background: transparent; color: oklch(0.565 0 0); cursor: pointer; transition: all 0.15s cubic-bezier(0.25,0.75,0.5,1); } .ds-tool-btn:hover { background: oklch(1 0 0); color: oklch(0.205 0 0); box-shadow: 0 2px 8px rgba(0,0,0,0.06); } .ds-tool-btn-selected { background: linear-gradient(to bottom right, oklch(0.527 0.154 278), oklch(0.47 0.15 278)); color: white; box-shadow: 0 4px 12px rgba(79, 98, 235, 0.3); } .ds-tool-btn:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Navbar / Top Bar",
+      "kind": "nav",
+      "refersTo": "navbar",
+      "description": "App-level top bar with search, notification bell, user menu, and New Board button.",
+      "html": "<header class=\"ds-topbar\"><div class=\"ds-search-wrap\"><svg class=\"ds-search-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.35-4.35\"/></svg><input class=\"ds-search-input\" placeholder=\"Search boards...\" /></div><div style=\"display:flex;align-items:center;gap:0.5rem;\"><div class=\"ds-user-chip\"><div class=\"ds-avatar\">JD</div><span class=\"ds-user-name\">Jane</span></div></div></header>",
+      "css": ".ds-topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem; border-bottom: 1px solid oklch(0.922 0 0); background: oklch(1 0 0); } .ds-search-wrap { position: relative; flex: 1; max-width: 28rem; } .ds-search-icon { position: absolute; left: 0.875rem; top: 50%; transform: translateY(-50%); color: oklch(0.556 0 0); pointer-events: none; } .ds-search-input { width: 100%; height: 2.5rem; padding: 0.5rem 0.875rem 0.5rem 2.5rem; border-radius: 0.875rem; border: 1px solid oklch(0.922 0 0); background: oklch(0.985 0 0); color: oklch(0.145 0 0); font-size: 0.875rem; outline: none; transition: border-color 0.15s cubic-bezier(0.25,0.75,0.5,1), box-shadow 0.15s cubic-bezier(0.25,0.75,0.5,1); } .ds-search-input:focus { border-color: oklch(0.527 0.154 278); box-shadow: 0 0 0 2px color-mix(in oklch, oklch(0.527 0.154 278) 20%, transparent); } .ds-search-input::placeholder { color: oklch(0.556 0 0); } .ds-user-chip { display: flex; align-items: center; gap: 0.625rem; padding: 0.375rem 0.75rem 0.375rem 0.375rem; border-radius: 0.875rem; border: 1px solid oklch(0.922 0 0); background: oklch(0.985 0 0); } .ds-avatar { width: 2rem; height: 2rem; border-radius: 9999px; background: linear-gradient(to bottom right, oklch(0.527 0.154 278), oklch(0.47 0.15 278)); display: flex; align-items: center; justify-content: center; color: white; font-size: 0.75rem; font-weight: 600; } .ds-user-name { font-size: 0.875rem; font-weight: 500; color: oklch(0.437 0 0); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Whiteboard",
+    "overview": "WhiteboardX is a whiteboard in the physical sense: a clean, bright surface where ideas happen. The interface is the frame around that surface — present enough to hold tools, quiet enough to forget about. The brand personality (playful, creative, energetic) lives in accent color, motion on state change, and crafted details, not in decoration or visual noise. This system explicitly rejects generic SaaS grayscale and overcomplicated tool UIs. It is soft and rounded without being childish, layered without being heavy. The canvas is the hero; chrome recedes.",
+    "keyCharacteristics": [
+      "Single sans-serif family (Geist) across the entire surface — no display/body pairing",
+      "Achromatic base with a single Deep Iris accent used sparingly for interactive states",
+      "Rounded corners throughout (xl on containers, lg on buttons, xl on inputs) — soft and approachable",
+      "Layered elevation (flat canvas, lifted toolbars, elevated overlays)",
+      "State-rich feedback (hover lifts, focus rings, active presses) — the interface responds to touch"
+    ],
+    "rules": [
+      { "name": "The Deep Iris Rule", "body": "The accent appears on active, selected, or interactive elements only. Never decorative. Its rarity is the point — when Deep Iris appears, the user knows something is actionable or active.", "section": "colors" },
+      { "name": "The One Voice Rule", "body": "All backgrounds are achromatic. Deep Iris is the only accent. Never add a second accent color without explicit system expansion.", "section": "colors" },
+      { "name": "The One Family Rule", "body": "No display font, no serif accent, no mono for UI labels. Geist at every weight covers the full hierarchy. A second font only for canvas-rendered text (user-selectable in the text tool).", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "No surface casts a shadow at rest. Shadows appear as a response to interaction (hover, focus, active). The canvas is always flat.", "section": "elevation" },
+      { "name": "The Whiteboard Rule", "body": "The canvas is the hero; the UI is the frame. No chrome should compete with the drawing surface.", "section": "overview" }
+    ],
+    "dos": [
+      "Use Deep Iris for exactly one thing per view: the primary action. Any second Deep Iris element degrades the accent.",
+      "Let the canvas breathe. The toolbar, sidebar, and top bar should feel like a frame around the work, not a dashboard.",
+      "Use rounded corners consistently: xl for containers, lg for buttons, xl for inputs.",
+      "Prefer inline actions over modal dialogs. Reserve modals for share, export, and settings.",
+      "Use Stone/Clay tinting for surface elevation in place of shadows.",
+      "Animate state changes only (hover → lift, press → depress, open → zoom in). No decorative entrance sequences on the product surface.",
+      "Respect reduced motion: all animations degrade to instant transitions."
+    ],
+    "donts": [
+      "Use Deep Iris as a decorative background tint or gradient. It marks interactivity; applying it at rest destroys its signal.",
+      "Use gradient text (background-clip: text with a gradient). Single solid colors only. Emphasis via weight or size.",
+      "Use glassmorphism or backdrop blur as a default surface treatment. Rare and purposeful only.",
+      "Create side-stripe borders (border-left >1px as colored accent) on cards, list items, or panels.",
+      "Overload the toolbar. Tools are a palette, not a menu. If a control is not a primary drawing action, move it to a sub-menu.",
+      "Use display fonts in UI labels, buttons, or data. Geist covers the full hierarchy.",
+      "Ship a surface that looks like 'generic SaaS' — no heavy shadows, no icon-only gradient buttons, no cream/beige backgrounds.",
+      "Let the app UI feel disconnected from the landing page. Both surfaces share Deep Iris, Geist, and the same rounded corner language — make it look intentional."
+    ]
+  }
+}

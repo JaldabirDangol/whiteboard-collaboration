@@ -39,6 +39,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
   const [remoteLaserStrokes, setRemoteLaserStrokes] = useState<LaserStroke[]>([]);
   const [remoteDraftShapes, setRemoteDraftShapes] = useState<Map<string, BoardShape>>(new Map());
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [remoteUserLabels, setRemoteUserLabels] = useState<Record<string, string>>({});
   const [serverReadOnly, setServerReadOnly] = useState(false);
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const hasRemoteDataRef = useRef(false);
@@ -81,18 +82,23 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     const normalizedShapes = normalizeShapesForClient(nextShapes);
 
     doc.transact(() => {
-      // Delete removed shapes
-      const existingKeys = new Set(Array.from(yBoard.keys()).filter(isShapeKey));
+      const committedIds = new Set(committedShapesRef.current.map(s => s.id));
       const newIds = new Set(normalizedShapes.map(s => s.id));
-      for (const key of existingKeys) {
-        if (!newIds.has(idFromShapeKey(key))) {
-          yBoard.delete(key);
+
+      const locallyCommittedIds = new Set(Array.from(yBoard.keys()).filter(isShapeKey).map(idFromShapeKey));
+
+      // Delete shapes the local user explicitly removed (was in committedIds but not in newIds)
+      for (const id of committedIds) {
+        if (!newIds.has(id) && locallyCommittedIds.has(id)) {
+          yBoard.delete(shapeKeyForId(id));
         }
       }
-      // Write per-shape entries
+
+      // Write/update only local user's shapes
       for (const shape of normalizedShapes) {
         yBoard.set(shapeKeyForId(shape.id), JSON.stringify(shape));
       }
+
       // Clean up old shapes blob if migrating
       if (yBoard.has(SHAPES_KEY)) {
         yBoard.delete(SHAPES_KEY);
@@ -244,9 +250,16 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       });
     };
 
-    const onCursorMove = ({ userId: incomingUserId, position }: { userId?: string; position?: { x: number; y: number } }) => {
+    const onCursorMove = ({ userId: incomingUserId, position, userName }: { userId?: string; position?: { x: number; y: number }; userName?: string }) => {
       if (!incomingUserId || !position) return;
       if (userIdRef.current && incomingUserId === userIdRef.current) return;
+
+      if (userName) {
+        setRemoteUserLabels((prev) => {
+          if (prev[incomingUserId] === userName) return prev;
+          return { ...prev, [incomingUserId]: userName };
+        });
+      }
 
       setRemoteCursors((prev) => ({
         ...prev,
@@ -273,6 +286,12 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
         next.delete(incomingUserId);
         return next;
       });
+      setRemoteUserLabels((prev) => {
+        if (!(incomingUserId in prev)) return prev;
+        const next = { ...prev };
+        delete next[incomingUserId];
+        return next;
+      });
     };
 
     const onBoardForbidden = ({ message }: { message?: string }) => {
@@ -291,10 +310,17 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       window.location.href = "/boards";
     };
 
-    const onUserOnline = (payload: { userId?: string }) => {
+    const onUserOnline = (payload: { userId?: string; userName?: string }) => {
       const uid = payload?.userId;
       if (!uid) return;
       setOnlineUserIds((prev) => new Set(prev).add(uid));
+      if (payload?.userName) {
+        setRemoteUserLabels((prev) => {
+          const label = payload.userName!;
+          if (prev[uid] === label) return prev;
+          return { ...prev, [uid]: label };
+        });
+      }
     };
 
     const onUserOffline = (payload: { userId?: string }) => {
@@ -422,6 +448,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     remoteLaserStrokes,
     remoteDraftShapes,
     onlineUserIds,
+    remoteUserLabels,
     persistShapes,
     updateShapesLocally,
     emitCursorMove,

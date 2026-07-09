@@ -130,6 +130,7 @@ export default function Page() {
     remoteLaserStrokes,
     remoteDraftShapes,
     onlineUserIds,
+    remoteUserLabels,
     forbiddenMessage,
     drawingRef,
   } = useBoardRealtime({
@@ -283,8 +284,14 @@ export default function Page() {
       labels[member.userId] = member.user.name?.trim() || member.user.email;
     }
 
+    for (const [uid, name] of Object.entries(remoteUserLabels)) {
+      if (!labels[uid]) {
+        labels[uid] = name;
+      }
+    }
+
     return labels;
-  }, [boardDetails]);
+  }, [boardDetails, remoteUserLabels]);
 
   const joinBoardMutation = useMutation({
     mutationFn: () => joinBoard(id),

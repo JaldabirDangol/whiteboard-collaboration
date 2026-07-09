@@ -53,6 +53,8 @@ export const registerPresenceEvents = (io: Server, socket: Socket) => {
       return
     }
 
+    const user = socket.data.user as { id?: string; email?: string; name?: string } | undefined;
+    const userName = user?.name?.trim() || user?.email || "";
     const userId = getSocketUserId(socket) ?? socket.id
 
     if (activeBoardId && activeBoardId !== boardId) {
@@ -75,6 +77,7 @@ export const registerPresenceEvents = (io: Server, socket: Socket) => {
 
     socket.to(boardId).emit("presence:userOnline", {
       userId,
+      userName,
       status: "online",
     })
   })
@@ -116,9 +119,13 @@ export const registerPresenceEvents = (io: Server, socket: Socket) => {
       const canSharePresence = await canAccessBoard(socket, boardId)
       if (!canSharePresence) return
 
+      const user = socket.data.user as { id?: string; email?: string; name?: string } | undefined;
+      const userName = user?.name?.trim() || user?.email || "";
+
       socket.to(boardId).emit("presence:cursorMove", {
         userId: getSocketUserId(socket) ?? socket.id,
         position,
+        userName,
       })
     } catch (error) {
       console.error("[presence:cursorMove]", error)

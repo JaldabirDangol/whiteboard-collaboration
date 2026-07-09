@@ -312,6 +312,16 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       // Apply the change to the server's version of the doc
       Y.applyUpdate(doc, normalizedUpdate, CLIENT_UPDATE_ORIGIN);
 
+      // Safety net: ensure socket is in the board room before broadcasting
+      if (!socket.rooms.has(boardId)) {
+        console.log(`[yjs:server] auto-joining socket ${socket.id.slice(0,8)} to board ${boardId} — was missing from room`);
+        socket.join(boardId);
+        trackRoomJoin(boardId, socket.id);
+        if (!joinedBoards.has(boardId)) {
+          joinedBoards.add(boardId);
+        }
+      }
+
       // Broadcast that specific change to everyone else in the room
       const room = io.sockets.adapter.rooms.get(boardId);
       const roomSize = room?.size ?? 0;

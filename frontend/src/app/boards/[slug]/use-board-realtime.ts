@@ -82,35 +82,22 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     if (!doc || !yBoard) return;
 
     const normalizedShapes = normalizeShapesForClient(nextShapes);
-    const committed = committedShapesRef.current;
-    const committedMap = new Map(committed.map(s => [s.id, s]));
 
     doc.transact(() => {
+      const existingKeys = new Set(Array.from(yBoard.keys()).filter(isShapeKey));
       const newIds = new Set(normalizedShapes.map(s => s.id));
-
-      // Delete shapes the local user explicitly removed (was in committed but not in next)
-      for (const id of committedMap.keys()) {
-        if (!newIds.has(id)) {
-          yBoard.delete(shapeKeyForId(id));
+      for (const key of existingKeys) {
+        if (!newIds.has(idFromShapeKey(key))) {
+          yBoard.delete(key);
         }
       }
-
-      // Write only new or changed shapes (delta)
       for (const shape of normalizedShapes) {
-        const existing = committedMap.get(shape.id);
-        if (!existing || JSON.stringify(existing) !== JSON.stringify(shape)) {
-          yBoard.set(shapeKeyForId(shape.id), JSON.stringify(shape));
-        }
+        yBoard.set(shapeKeyForId(shape.id), JSON.stringify(shape));
       }
-
-      // Clean up old shapes blob if migrating
       if (yBoard.has(SHAPES_KEY)) {
         yBoard.delete(SHAPES_KEY);
       }
     }, LOCAL_ORIGIN);
-
-    // Sync committed ref from Y.Doc so next delta compares against latest state
-    committedShapesRef.current = readShapesFromYBoard(yBoard);
   }, []);
 
 

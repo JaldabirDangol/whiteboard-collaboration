@@ -43,6 +43,8 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
   const [serverReadOnly, setServerReadOnly] = useState(false);
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const hasRemoteDataRef = useRef(false);
+  const joinedRef = useRef(false);
+  const pendingUpdatesRef = useRef<Uint8Array[]>([]);
   const draftTimestampsRef = useRef<Map<string, number>>(new Map());
   const committedShapesRef = useRef<BoardShape[]>([]);
 
@@ -199,17 +201,36 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
     const socket = acquireSocket();
     socketRef.current = socket;
 
+    const flushPendingUpdates = () => {
+      const pending = pendingUpdatesRef.current;
+      if (pending.length === 0) return;
+      pendingUpdatesRef.current = [];
+      for (const update of pending) {
+        socket.emit("yjs:update", { boardId, update: Array.from(update) });
+      }
+      console.log(`[yjs:flush] flushed ${pending.length} queued updates for board ${boardId}`);
+    };
+
     const onDocUpdate = (update: Uint8Array, origin: unknown) => {
       if (origin !== LOCAL_ORIGIN) return;
+      if (!joinedRef.current) {
+        pendingUpdatesRef.current.push(update);
+        console.log(`[yjs:queue] queued update (${update.length} bytes) — not yet joined board ${boardId}`);
+        return;
+      }
       socket.emit("yjs:update", { boardId, update: Array.from(update) });
     };
 
     const onInit = ({ yjsState }: { yjsState: unknown }) => {
+      joinedRef.current = true;
       hasRemoteDataRef.current = true;
       const update = toUint8(yjsState);
-      if (update.length === 0) return;
-      Y.applyUpdate(doc, update, REMOTE_ORIGIN);
+      if (update.length > 0) {
+        Y.applyUpdate(doc, update, REMOTE_ORIGIN);
+      }
       syncShapesFromYDoc();
+      flushPendingUpdates();
+      console.log(`[yjs:init] board ${boardId} joined — ${update.length} bytes initial state`);
     };
 
     const onUpdate = (rawUpdate: unknown) => {
@@ -218,6 +239,7 @@ export const useBoardRealtime = ({ boardId, userId, persistedShapes }: UseBoardR
       if (update.length === 0) return;
       Y.applyUpdate(doc, update, REMOTE_ORIGIN);
       syncShapesFromYDoc();
+      console.log(`[yjs:rcv] board ${boardId} — applied ${update.length} byte update (${committedShapesRef.current.length} shapes)`);
     };
 
     const onState = (rawUpdate: unknown) => {

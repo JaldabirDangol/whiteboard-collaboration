@@ -266,6 +266,8 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
         serverTime: Date.now(),
       });
 
+      console.log(`[yjs:server-init] board=${boardId} socket=${socket.id.slice(0,8)} shapes=${state.length}B`);
+
       const joinerUserId = socket.data.user?.id;
       socket.to(boardId).emit("board:userJoined", {
         userId: joinerUserId ?? socket.id,
@@ -311,7 +313,11 @@ export const registerBoardEvents = (io: Server, socket: Socket) => {
       Y.applyUpdate(doc, normalizedUpdate, CLIENT_UPDATE_ORIGIN);
 
       // Broadcast that specific change to everyone else in the room
+      const room = io.sockets.adapter.rooms.get(boardId);
+      const roomSize = room?.size ?? 0;
       socket.to(boardId).emit("yjs:update", Array.from(normalizedUpdate));
+
+      console.log(`[yjs:server] board=${boardId} socket=${socket.id.slice(0,8)} update=${normalizedUpdate.length}B room=${roomSize} -> others=${roomSize > 0 ? roomSize - 1 : 0}`);
 
       // Trigger debounced persist
       debouncedPersist(boardId, doc, socket.data.user?.id);
